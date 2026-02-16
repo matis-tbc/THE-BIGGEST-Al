@@ -1,0 +1,8 @@
+Hello {{name}},
+
+Thank you for your interest in {{company}}. We're excited to connect with you!
+
+We'll be in touch soon regarding opportunities in the {{department}} department.
+
+Best regards,
+The Team
