@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { campaignStore } from '../services/campaignStore';
+import { cancelSchedulerJob, enqueueSchedulerJob, listSchedulerJobs, pauseSchedulerJob, resumeSchedulerJob, SchedulerJob } from '../services/schedulerService';
+import { syncSchedulerResults } from '../services/campaignSync';
 
 interface ErrorReviewProps {
   operationId: string;
+  campaignId?: string;
   results: ProcessingResult[];
   onStartOver: () => void;
   onReviewFailedContacts?: () => void;
@@ -16,16 +20,111 @@ interface ProcessingResult {
   error?: string;
 }
 
-export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, onStartOver, onReviewFailedContacts }) => {
+function toLocalDateTimeInputValue(date: Date): string {
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function formatDurationMs(value: number): string {
+  if (!value) return 'n/a';
+  const minutes = Math.round(value / 60000);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = (minutes / 60).toFixed(1);
+  return `${hours} hr`;
+}
+
+export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignId, results, onStartOver, onReviewFailedContacts }) => {
   const [retryCount, setRetryCount] = useState(0);
+  const [analytics, setAnalytics] = useState<{
+    total: number;
+    drafted: number;
+    queued: number;
+    sending: number;
+    sent: number;
+    failed: number;
+    replied: number;
+    sendRate: number;
+    replyRate: number;
+    avgTimeToSendMs: number;
+    avgTimeToReplyMs: number;
+  } | null>(null);
+  const [jobs, setJobs] = useState<SchedulerJob[]>([]);
+  const [jobError, setJobError] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState('CU Hyperloop Campaign Drafts');
+  const [categoryName, setCategoryName] = useState('CU-Hyperloop');
+  const [scheduleAt, setScheduleAt] = useState(toLocalDateTimeInputValue(new Date(Date.now() + 10 * 60 * 1000)));
 
   const completedResults = results.filter(r => r.status === 'completed');
   const failedResults = results.filter(r => r.status === 'failed');
+  const messageIds = useMemo(
+    () => completedResults.map(item => item.messageId).filter((value): value is string => Boolean(value)),
+    [completedResults]
+  );
+
+  const refreshCampaign = async () => {
+    if (!campaignId) return;
+    await syncSchedulerResults();
+    const [nextAnalytics, allJobs] = await Promise.all([
+      campaignStore.computeAnalytics(campaignId),
+      listSchedulerJobs(),
+    ]);
+    setAnalytics(nextAnalytics);
+    setJobs(allJobs.filter(job => job.campaignId === campaignId));
+  };
+
+  useEffect(() => {
+    refreshCampaign().catch(error => {
+      console.error('Failed to refresh campaign analytics:', error);
+    });
+    const timer = window.setInterval(() => {
+      refreshCampaign().catch(error => {
+        console.error('Failed to refresh campaign analytics:', error);
+      });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [campaignId]);
 
   const handleRetryFailed = async () => {
     setRetryCount(prev => prev + 1);
     // In real implementation, this would retry the failed contacts
     console.log('Retrying failed contacts...');
+  };
+
+  const handleQueueAutoSort = async () => {
+    try {
+      setJobError(null);
+      if (!campaignId) {
+        throw new Error('Campaign context is not available.');
+      }
+      if (messageIds.length === 0) {
+        throw new Error('No successful draft message IDs available for scheduling.');
+      }
+      const runAtMs = new Date(scheduleAt).getTime();
+      if (!Number.isFinite(runAtMs)) {
+        throw new Error('Please provide a valid schedule time.');
+      }
+
+      const job = await enqueueSchedulerJob({
+        campaignId,
+        messageIds,
+        runAt: runAtMs,
+        folderName: folderName.trim() || 'CU Hyperloop Campaign Drafts',
+        categoryName: categoryName.trim() || undefined,
+        maxAttempts: 3,
+      });
+      await campaignStore.setQueued(campaignId, messageIds, job.id);
+      await campaignStore.updateCampaignStatus(campaignId, 'queued');
+      await campaignStore.createEvents(messageIds.map(messageId => ({
+        campaignId,
+        messageId,
+        type: 'queued_for_send',
+        detail: `Queued for scheduler automation (${new Date(runAtMs).toLocaleString()}).`,
+      })));
+      await refreshCampaign();
+    } catch (error) {
+      console.error('Failed to queue scheduler job:', error);
+      setJobError(error instanceof Error ? error.message : 'Failed to queue scheduler job.');
+    }
   };
 
   const handleExportResults = () => {
@@ -51,6 +150,18 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
     URL.revokeObjectURL(url);
   };
 
+  const handleExportAudit = async () => {
+    if (!campaignId) return;
+    const csv = await campaignStore.exportAuditCsv(campaignId);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `campaign-audit-${campaignId}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -73,6 +184,124 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
           <div className="text-sm text-red-600">Failed</div>
         </div>
       </div>
+
+      {campaignId && analytics && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900">Campaign Automation + Analytics</h3>
+            <div className="flex items-center gap-2">
+              <button onClick={handleExportAudit} className="btn-secondary">Export Audit CSV</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+              <p className="text-gray-500">Drafted</p>
+              <p className="text-lg font-semibold text-gray-900">{analytics.drafted}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 bg-blue-50 p-3">
+              <p className="text-blue-700">Queued</p>
+              <p className="text-lg font-semibold text-blue-800">{analytics.queued}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 bg-green-50 p-3">
+              <p className="text-green-700">Automation Complete</p>
+              <p className="text-lg font-semibold text-green-800">{analytics.sent}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 bg-red-50 p-3">
+              <p className="text-red-700">Failed</p>
+              <p className="text-lg font-semibold text-red-800">{analytics.failed}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600">
+            <p>Auto-processing rate: {(analytics.sendRate * 100).toFixed(0)}%</p>
+            <p>Reply rate tracked: {(analytics.replyRate * 100).toFixed(0)}%</p>
+            <p>Avg queue-to-complete: {formatDurationMs(analytics.avgTimeToSendMs)}</p>
+            <p>Avg complete-to-reply: {formatDurationMs(analytics.avgTimeToReplyMs)}</p>
+          </div>
+
+          <div className="border border-gray-200 rounded-md p-3 space-y-3">
+            <h4 className="text-sm font-medium text-gray-800">Queue Auto-Sorting</h4>
+            <p className="text-xs text-gray-600">
+              Schedule moving drafted messages into a campaign folder and optionally tag a category.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={event => setScheduleAt(event.target.value)}
+                className="input-field"
+              />
+              <input
+                type="text"
+                value={folderName}
+                onChange={event => setFolderName(event.target.value)}
+                placeholder="Folder name in Drafts"
+                className="input-field"
+              />
+              <input
+                type="text"
+                value={categoryName}
+                onChange={event => setCategoryName(event.target.value)}
+                placeholder="Optional category"
+                className="input-field"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500">{messageIds.length} drafted message(s) eligible.</p>
+              <button onClick={handleQueueAutoSort} className="btn-secondary">Queue Auto-Sort Job</button>
+            </div>
+            {jobError && <p className="text-xs text-red-700">{jobError}</p>}
+          </div>
+
+          {jobs.length > 0 && (
+            <div className="border border-gray-200 rounded-md">
+              <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 text-sm font-medium text-gray-800">
+                Scheduler Jobs
+              </div>
+              <div className="divide-y divide-gray-100">
+                {jobs.map(job => (
+                  <div key={job.id} className="px-3 py-2 flex items-center justify-between text-sm">
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {job.status.toUpperCase()} · {new Date(job.runAt).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {job.messageIds.length} msg · folder "{job.folderName}" · attempts {job.attempts}/{job.maxAttempts}
+                      </p>
+                      {job.error && <p className="text-xs text-red-700">{job.error}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {job.status === 'paused' && (
+                        <button
+                          onClick={() => resumeSchedulerJob(job.id).then(refreshCampaign)}
+                          className="btn-secondary"
+                        >
+                          Resume
+                        </button>
+                      )}
+                      {(job.status === 'queued' || job.status === 'running') && (
+                        <button
+                          onClick={() => pauseSchedulerJob(job.id).then(refreshCampaign)}
+                          className="btn-secondary"
+                        >
+                          Pause
+                        </button>
+                      )}
+                      {(job.status === 'queued' || job.status === 'paused') && (
+                        <button
+                          onClick={() => cancelSchedulerJob(job.id).then(refreshCampaign)}
+                          className="btn-secondary"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Success Results */}
       {completedResults.length > 0 && (

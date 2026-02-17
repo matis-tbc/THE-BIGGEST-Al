@@ -14,6 +14,18 @@ declare global {
       logout: () => Promise<boolean>;
       handleRedirect: (url: string, authContext?: { codeVerifier?: string; state?: string }) => Promise<any>;
       openExternal: (url: string) => Promise<void>;
+      enqueueSchedulerJob: (payload: {
+        campaignId: string;
+        messageIds: string[];
+        runAt: number;
+        folderName: string;
+        categoryName?: string;
+        maxAttempts?: number;
+      }) => Promise<any>;
+      listSchedulerJobs: () => Promise<any[]>;
+      pauseSchedulerJob: (jobId: string) => Promise<any>;
+      resumeSchedulerJob: (jobId: string) => Promise<any>;
+      cancelSchedulerJob: (jobId: string) => Promise<any>;
       onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => () => void;
     };
   }
@@ -30,6 +42,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   logout: () => ipcRenderer.invoke('auth:logout'),
   handleRedirect: (url: string, authContext?: { codeVerifier?: string; state?: string }) => ipcRenderer.invoke('auth:handle-redirect', url, authContext),
   openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
+  enqueueSchedulerJob: (payload: {
+    campaignId: string;
+    messageIds: string[];
+    runAt: number;
+    folderName: string;
+    categoryName?: string;
+    maxAttempts?: number;
+  }) => ipcRenderer.invoke('campaign:scheduler-enqueue', payload),
+  listSchedulerJobs: () => ipcRenderer.invoke('campaign:scheduler-list'),
+  pauseSchedulerJob: (jobId: string) => ipcRenderer.invoke('campaign:scheduler-pause', jobId),
+  resumeSchedulerJob: (jobId: string) => ipcRenderer.invoke('campaign:scheduler-resume', jobId),
+  cancelSchedulerJob: (jobId: string) => ipcRenderer.invoke('campaign:scheduler-cancel', jobId),
   onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => {
     const handler = (_: any, result: { success: boolean; message?: string }) => callback(result);
     ipcRenderer.on('auth:completed', handler);

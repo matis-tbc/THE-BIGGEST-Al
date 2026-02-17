@@ -7,7 +7,10 @@ import { PreflightReview } from './components/PreflightReview';
 import { BatchProgress } from './components/BatchProgress';
 import { ErrorReview } from './components/ErrorReview';
 import { RendererErrorOverlay } from './components/RendererErrorOverlay';
+import { CampaignHome } from './components/CampaignHome';
 import { projectStore } from './services/projectStore';
+import { campaignStore, MessageStatus } from './services/campaignStore';
+import { syncSchedulerResults } from './services/campaignSync';
 import { motion } from 'framer-motion';
 import { Sparkles, Gauge } from 'lucide-react';
 
@@ -27,11 +30,12 @@ interface Template {
 
 interface AppState {
   isAuthenticated: boolean;
-  currentStep: 'auth' | 'contacts' | 'template' | 'attachment' | 'preflight' | 'processing' | 'review';
+  currentStep: 'auth' | 'home' | 'contacts' | 'template' | 'attachment' | 'preflight' | 'processing' | 'review';
   contacts: Contact[];
   template: Template | null;
   attachment: File | null;
   operationId: string | null;
+  campaignId: string | null;
   results: ProcessingResult[];
 }
 
@@ -57,6 +61,7 @@ function App() {
     template: null,
     attachment: null,
     operationId: null,
+    campaignId: null,
     results: [],
   });
 
@@ -113,7 +118,7 @@ function App() {
       const tokens = await window.electronAPI.getTokens();
       if (tokens) {
         setTokenExpiry(tokens.expiresAt || null);
-        setAppState(prev => ({ ...prev, isAuthenticated: true, currentStep: 'contacts' }));
+        setAppState(prev => ({ ...prev, isAuthenticated: true, currentStep: 'home' }));
         if (window.electronAPI.getUserProfile) {
           const profile = await window.electronAPI.getUserProfile();
           if (profile) {
@@ -125,7 +130,6 @@ function App() {
           setAppState(prev => ({
             ...prev,
             contacts: recentProject.contacts as Contact[],
-            currentStep: recentProject.templateId ? 'template' : 'contacts',
           }));
           setRestoredProjectNotice(`Restored recent project "${recentProject.name}".`);
         }
@@ -138,8 +142,8 @@ function App() {
   };
 
   const handleAuthSuccess = () => {
-    console.info('[App] Authentication successful, moving to contacts step');
-    setAppState(prev => ({ ...prev, isAuthenticated: true, currentStep: 'contacts' }));
+    console.info('[App] Authentication successful, moving to campaign home');
+    setAppState(prev => ({ ...prev, isAuthenticated: true, currentStep: 'home' }));
     setRendererError(null);
     if (window.electronAPI?.getUserProfile) {
       window.electronAPI.getUserProfile()
@@ -166,6 +170,19 @@ function App() {
   const handleContactsImported = (contacts: Contact[]) => {
     console.info('[App] Imported contacts:', contacts.length);
     setAppState(prev => ({ ...prev, contacts, currentStep: 'template' }));
+  };
+
+  const startNewCampaign = () => {
+    setAppState(prev => ({
+      ...prev,
+      currentStep: 'contacts',
+      contacts: [],
+      template: null,
+      attachment: null,
+      operationId: null,
+      campaignId: null,
+      results: [],
+    }));
   };
 
   const handleTemplateSelected = (template: Template) => {
@@ -196,9 +213,57 @@ function App() {
       };
     });
 
+    const campaignId = `camp-${Date.now()}`;
+    const toMessageStatus = (status: ProcessingResult['status']): MessageStatus => {
+      if (status === 'completed') return 'drafted';
+      if (status === 'failed') return 'failed';
+      return 'drafted';
+    };
+
+    void (async () => {
+      try {
+        await campaignStore.createCampaign({
+          id: campaignId,
+          name: appState.template?.name
+            ? `${appState.template.name} (${new Date().toLocaleString()})`
+            : `Campaign ${new Date().toLocaleString()}`,
+          templateId: appState.template?.id,
+          attachmentName: appState.attachment?.name,
+        });
+        await campaignStore.upsertMessages(
+          enrichedResults.map(item => ({
+            id: `msg-${campaignId}-${item.contactId}`,
+            campaignId,
+            contactId: item.contactId,
+            contactName: item.name,
+            contactEmail: item.email,
+            messageId: item.messageId,
+            status: toMessageStatus(item.status),
+            draftCreatedAt: item.status === 'completed' ? new Date().toISOString() : undefined,
+            error: item.error,
+            updatedAt: new Date().toISOString(),
+          }))
+        );
+        await campaignStore.createEvents(
+          enrichedResults.map(item => ({
+            campaignId,
+            messageId: item.messageId,
+            contactId: item.contactId,
+            type: item.status === 'completed' ? 'draft_created' : 'send_failed',
+            detail: item.status === 'completed' ? 'Draft created in Outlook.' : (item.error || 'Draft creation failed'),
+          }))
+        );
+        const hasFailures = enrichedResults.some(item => item.status === 'failed');
+        await campaignStore.updateCampaignStatus(campaignId, hasFailures ? 'failed' : 'drafted');
+      } catch (error) {
+        console.error('Failed to persist campaign records:', error);
+      }
+    })();
+
     setAppState(prev => ({
       ...prev,
       operationId,
+      campaignId,
       results: enrichedResults,
       currentStep: 'review'
     }));
@@ -213,10 +278,24 @@ function App() {
       template: null,
       attachment: null,
       operationId: null,
+      campaignId: null,
       results: [],
     });
     setTokenExpiry(null);
     setRestoredProjectNotice(null);
+  };
+
+  const backToCampaignHome = () => {
+    setAppState(prev => ({
+      ...prev,
+      currentStep: 'home',
+      contacts: [],
+      template: null,
+      attachment: null,
+      operationId: null,
+      campaignId: null,
+      results: [],
+    }));
   };
 
   useEffect(() => {
@@ -233,6 +312,19 @@ function App() {
       console.error('Failed to autosave project snapshot:', error);
     });
   }, [appState.isAuthenticated, appState.contacts, appState.template, appState.attachment]);
+
+  useEffect(() => {
+    if (!appState.isAuthenticated) return;
+    syncSchedulerResults().catch(error => {
+      console.error('Initial scheduler sync failed:', error);
+    });
+    const timer = window.setInterval(() => {
+      syncSchedulerResults().catch(error => {
+        console.error('Periodic scheduler sync failed:', error);
+      });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [appState.isAuthenticated]);
 
   if (isLoading) {
     return (
@@ -294,9 +386,24 @@ function App() {
           {restoredProjectNotice && (
             <p className="text-xs text-cyan-300 mt-1">{restoredProjectNotice}</p>
           )}
+          <div className="mt-3">
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                if (window.electronAPI?.logout) {
+                  window.electronAPI.logout().finally(() => resetApp());
+                } else {
+                  resetApp();
+                }
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
         </motion.div>
 
         {/* Progress Steps */}
+        {appState.currentStep !== 'home' && (
         <div className="mb-8">
           <div className="flex items-center justify-between gap-2">
             {[
@@ -344,18 +451,19 @@ function App() {
             ))}
           </div>
         </div>
+        )}
 
         {/* Main Content */}
         <div className="card">
+          {appState.currentStep === 'home' && (
+            <CampaignHome onStartNewCampaign={startNewCampaign} />
+          )}
+
           {appState.currentStep === 'contacts' && (
             <ContactImport 
               onContactsImported={handleContactsImported}
               onBack={() => {
-                if (window.electronAPI?.logout) {
-                  window.electronAPI.logout().finally(() => resetApp());
-                } else {
-                  resetApp();
-                }
+                backToCampaignHome();
               }}
             />
           )}
@@ -398,12 +506,13 @@ function App() {
           {appState.currentStep === 'review' && (
             <ErrorReview 
               operationId={appState.operationId!}
+              campaignId={appState.campaignId || undefined}
               results={appState.results}
               onReviewFailedContacts={() => {
                 setRestoredProjectNotice('Moved back to contacts so you can fix failed rows.');
                 setAppState(prev => ({ ...prev, currentStep: 'contacts' }));
               }}
-              onStartOver={resetApp}
+              onStartOver={backToCampaignHome}
             />
           )}
         </div>

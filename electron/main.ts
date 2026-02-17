@@ -9,6 +9,7 @@ const { AuthService } = require('./auth');
 const isDev = process.env.NODE_ENV === 'development';
 const OAUTH_PORT = 3000;
 const OAUTH_HOST = '127.0.0.1';
+const SCHEDULER_POLL_MS = 5000;
 
 let mainWindow: any;
 let oauthServer: any;
@@ -18,9 +19,189 @@ interface PendingAuth {
 }
 
 let pendingAuth: PendingAuth | null = null;
+let schedulerTimer: NodeJS.Timeout | null = null;
+
+type SchedulerStatus = 'queued' | 'running' | 'completed' | 'failed' | 'paused' | 'cancelled';
+
+interface SchedulerJob {
+  id: string;
+  campaignId: string;
+  messageIds: string[];
+  runAt: number;
+  folderName: string;
+  categoryName?: string;
+  attempts: number;
+  maxAttempts: number;
+  status: SchedulerStatus;
+  error?: string;
+  lastResult?: {
+    succeededMessageIds: string[];
+    failedMessageIds: Array<{ messageId: string; error: string }>;
+  };
+  createdAt: number;
+  updatedAt: number;
+}
+
+const schedulerJobs = new Map<string, SchedulerJob>();
 
 function getPendingAuthStorePath(): string {
   return path.join(app.getPath('userData'), 'pending-auth.json');
+}
+
+function getSchedulerStorePath(): string {
+  return path.join(app.getPath('userData'), 'scheduler-jobs.json');
+}
+
+function loadSchedulerJobs(): void {
+  try {
+    const filePath = getSchedulerStorePath();
+    if (!fs.existsSync(filePath)) return;
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw) as SchedulerJob[];
+    if (!Array.isArray(parsed)) return;
+    parsed.forEach(job => {
+      if (job?.id && Array.isArray(job.messageIds)) {
+        schedulerJobs.set(job.id, job);
+      }
+    });
+  } catch (error) {
+    console.warn('Failed to load scheduler jobs:', error);
+  }
+}
+
+function persistSchedulerJobs(): void {
+  try {
+    const payload = Array.from(schedulerJobs.values()).sort((a, b) => b.createdAt - a.createdAt);
+    fs.writeFileSync(getSchedulerStorePath(), JSON.stringify(payload, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('Failed to persist scheduler jobs:', error);
+  }
+}
+
+function listSchedulerJobs(): SchedulerJob[] {
+  return Array.from(schedulerJobs.values()).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function updateSchedulerJob(jobId: string, updater: (job: SchedulerJob) => SchedulerJob): SchedulerJob | null {
+  const current = schedulerJobs.get(jobId);
+  if (!current) return null;
+  const next = updater(current);
+  schedulerJobs.set(jobId, { ...next, updatedAt: Date.now() });
+  persistSchedulerJobs();
+  return schedulerJobs.get(jobId) || null;
+}
+
+async function graphRequest(accessToken: string, endpoint: string, init?: RequestInit): Promise<any> {
+  const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Graph request failed (${response.status}) ${endpoint}: ${body}`);
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+async function ensureCampaignFolder(accessToken: string, folderName: string): Promise<string> {
+  const childFolders = await graphRequest(
+    accessToken,
+    `/me/mailFolders/drafts/childFolders?$select=id,displayName&$top=200`
+  ) as { value?: Array<{ id: string; displayName: string }> };
+
+  const existing = (childFolders.value || []).find(
+    folder => folder.displayName.toLowerCase() === folderName.toLowerCase()
+  );
+  if (existing) return existing.id;
+
+  const created = await graphRequest(accessToken, '/me/mailFolders/drafts/childFolders', {
+    method: 'POST',
+    body: JSON.stringify({ displayName: folderName }),
+  }) as { id: string };
+
+  return created.id;
+}
+
+async function runSchedulerJob(job: SchedulerJob): Promise<void> {
+  const authService = new AuthService();
+  let tokens = await authService.getStoredTokens();
+  if (!tokens) {
+    throw new Error('Authentication required before scheduler execution.');
+  }
+  if (authService.isTokenExpired(tokens) && tokens.refreshToken) {
+    tokens = await authService.refreshAccessToken(tokens.refreshToken);
+  }
+
+  const folderId = await ensureCampaignFolder(tokens.accessToken, job.folderName);
+  const succeededMessageIds: string[] = [];
+  const failedMessageIds: Array<{ messageId: string; error: string }> = [];
+
+  for (const messageId of job.messageIds) {
+    try {
+      if (job.categoryName && job.categoryName.trim()) {
+        await graphRequest(tokens.accessToken, `/me/messages/${messageId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ categories: [job.categoryName.trim()] }),
+        });
+      }
+      await graphRequest(tokens.accessToken, `/me/messages/${messageId}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ destinationId: folderId }),
+      });
+      succeededMessageIds.push(messageId);
+    } catch (error) {
+      failedMessageIds.push({
+        messageId,
+        error: error instanceof Error ? error.message : 'Unknown auto-sort failure',
+      });
+    }
+  }
+
+  const hasFailures = failedMessageIds.length > 0;
+  const canRetry = hasFailures && job.attempts + 1 < job.maxAttempts;
+  const nextStatus: SchedulerStatus = hasFailures ? (canRetry ? 'queued' : 'failed') : 'completed';
+  const nextRunAt = canRetry ? Date.now() + Math.min(600000, (2 ** (job.attempts + 1)) * 30000) : job.runAt;
+
+  updateSchedulerJob(job.id, current => ({
+    ...current,
+    attempts: current.attempts + 1,
+    runAt: nextRunAt,
+    status: nextStatus,
+    error: hasFailures ? `${failedMessageIds.length} message(s) failed auto-sort` : undefined,
+    lastResult: { succeededMessageIds, failedMessageIds },
+  }));
+}
+
+function startScheduler(): void {
+  if (schedulerTimer) return;
+  schedulerTimer = setInterval(async () => {
+    const now = Date.now();
+    const dueJobs = listSchedulerJobs().filter(job => job.status === 'queued' && job.runAt <= now);
+    for (const job of dueJobs) {
+      updateSchedulerJob(job.id, current => ({ ...current, status: 'running', error: undefined }));
+      try {
+        await runSchedulerJob(job);
+      } catch (error) {
+        updateSchedulerJob(job.id, current => {
+          const canRetry = current.attempts + 1 < current.maxAttempts;
+          return {
+            ...current,
+            attempts: current.attempts + 1,
+            status: canRetry ? 'queued' : 'failed',
+            runAt: canRetry ? Date.now() + Math.min(600000, (2 ** (current.attempts + 1)) * 30000) : current.runAt,
+            error: error instanceof Error ? error.message : 'Scheduler execution failed',
+          };
+        });
+      }
+    }
+  }, SCHEDULER_POLL_MS);
 }
 
 function persistPendingAuth(context: PendingAuth): void {
@@ -99,6 +280,8 @@ function createWindow(): void {
 
 // App event handlers
 app.whenReady().then(() => {
+  loadSchedulerJobs();
+  startScheduler();
   createWindow();
   createOAuthRedirectServer();
 });
@@ -108,6 +291,10 @@ app.on('window-all-closed', () => {
     if (oauthServer) {
       oauthServer.close();
       oauthServer = null;
+    }
+    if (schedulerTimer) {
+      clearInterval(schedulerTimer);
+      schedulerTimer = null;
     }
     app.quit();
   }
@@ -235,6 +422,62 @@ ipcMain.handle('app:open-external', async (_: any, url: string) => {
     console.error('Open external error:', error);
     throw error;
   }
+});
+
+ipcMain.handle('campaign:scheduler-enqueue', async (_: any, payload: {
+  campaignId: string;
+  messageIds: string[];
+  runAt: number;
+  folderName: string;
+  categoryName?: string;
+  maxAttempts?: number;
+}) => {
+  const now = Date.now();
+  const job: SchedulerJob = {
+    id: `job-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    campaignId: payload.campaignId,
+    messageIds: Array.from(new Set(payload.messageIds.filter(Boolean))),
+    runAt: Math.max(payload.runAt || now, now),
+    folderName: payload.folderName || `Campaign ${new Date().toLocaleDateString()}`,
+    categoryName: payload.categoryName,
+    attempts: 0,
+    maxAttempts: Math.max(1, payload.maxAttempts || 3),
+    status: 'queued',
+    createdAt: now,
+    updatedAt: now,
+  };
+  schedulerJobs.set(job.id, job);
+  persistSchedulerJobs();
+  return job;
+});
+
+ipcMain.handle('campaign:scheduler-list', async () => {
+  return listSchedulerJobs();
+});
+
+ipcMain.handle('campaign:scheduler-pause', async (_: any, jobId: string) => {
+  const updated = updateSchedulerJob(jobId, current => ({
+    ...current,
+    status: current.status === 'queued' || current.status === 'running' ? 'paused' : current.status,
+  }));
+  return updated;
+});
+
+ipcMain.handle('campaign:scheduler-resume', async (_: any, jobId: string) => {
+  const updated = updateSchedulerJob(jobId, current => ({
+    ...current,
+    status: current.status === 'paused' ? 'queued' : current.status,
+    runAt: current.runAt < Date.now() ? Date.now() + 1000 : current.runAt,
+  }));
+  return updated;
+});
+
+ipcMain.handle('campaign:scheduler-cancel', async (_: any, jobId: string) => {
+  const updated = updateSchedulerJob(jobId, current => ({
+    ...current,
+    status: 'cancelled',
+  }));
+  return updated;
 });
 
 function createOAuthRedirectServer(): void {
