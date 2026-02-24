@@ -89,50 +89,50 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Preflight Review</h2>
-        <p className="text-gray-600">Review checks before creating Outlook drafts.</p>
+        <h2 className="text-2xl font-bold text-gray-100 mb-2">Preflight Review</h2>
+        <p className="text-gray-400">Review checks before creating Outlook drafts.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">Validation Checks</h3>
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">Validation Checks</h3>
           <ul className="space-y-2 text-sm">
-            <li className={checks.invalidEmails.length ? 'text-red-600' : 'text-green-600'}>
+            <li className={checks.invalidEmails.length ? 'text-red-400' : 'text-green-400'}>
               Invalid emails: {checks.invalidEmails.length}
             </li>
-            <li className={checks.duplicateEmailCount ? 'text-yellow-600' : 'text-green-600'}>
+            <li className={checks.duplicateEmailCount ? 'text-yellow-400' : 'text-green-400'}>
               Duplicate emails: {checks.duplicateEmailCount}
             </li>
-            <li className={checks.templateValidation.errors.length ? 'text-red-600' : 'text-green-600'}>
+            <li className={checks.templateValidation.errors.length ? 'text-red-400' : 'text-green-400'}>
               Template errors: {checks.templateValidation.errors.length}
             </li>
-            <li className={checks.templateValidation.warnings.length ? 'text-yellow-600' : 'text-green-600'}>
+            <li className={checks.templateValidation.warnings.length ? 'text-yellow-400' : 'text-green-400'}>
               Template warnings: {checks.templateValidation.warnings.length}
             </li>
-            <li className={checks.emptySubjectCount > 0 ? 'text-yellow-600' : 'text-green-600'}>
+            <li className={checks.emptySubjectCount > 0 ? 'text-yellow-400' : 'text-green-400'}>
               Empty subjects after merge: {checks.emptySubjectCount}
             </li>
-            <li className={checks.emptyRecipientCount > 0 ? 'text-red-600' : 'text-green-600'}>
+            <li className={checks.emptyRecipientCount > 0 ? 'text-red-400' : 'text-green-400'}>
               Empty recipients after merge: {checks.emptyRecipientCount}
             </li>
             {checks.attachmentWarning && (
-              <li className="text-yellow-600">{checks.attachmentWarning}</li>
+              <li className="text-yellow-400">{checks.attachmentWarning}</li>
             )}
           </ul>
           {checks.templateValidation.errors.length > 0 && (
-            <ul className="mt-3 text-xs text-red-700 list-disc list-inside">
+            <ul className="mt-3 text-xs text-red-300 list-disc list-inside">
               {checks.templateValidation.errors.map(error => <li key={error}>{error}</li>)}
             </ul>
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">Recipient Preview</h3>
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">Recipient Preview</h3>
           {contacts.length > 0 && (
             <select
               value={previewIndex}
               onChange={event => setPreviewIndex(Number(event.target.value))}
-              className="mb-3 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="mb-3 w-full border border-gray-600 rounded-md px-3 py-2 text-sm bg-gray-700 text-gray-100"
             >
               {contacts.map((contact, index) => (
                 <option key={contact.id} value={index}>
@@ -142,10 +142,10 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
             </select>
           )}
           {preview && (
-            <div className="space-y-2 text-sm text-gray-700">
+            <div className="space-y-2 text-sm text-gray-300">
               <p><span className="font-semibold">To:</span> {preview.to}</p>
               <p><span className="font-semibold">Subject:</span> {preview.subject || '(empty)'}</p>
-              <div className="border border-gray-200 rounded-md p-2 max-h-44 overflow-y-auto whitespace-pre-wrap">
+              <div className="border border-gray-600 rounded-md p-2 max-h-44 overflow-y-auto whitespace-pre-wrap">
                 {preview.body}
               </div>
             </div>

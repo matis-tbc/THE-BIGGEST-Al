@@ -108,6 +108,7 @@
   .tunnel-content {
     position: relative;
     z-index: 1;
+    padding-bottom: 2rem;
   }
 
   .hyperloop-chip {
@@ -167,6 +168,16 @@
     outline: none;
     border-color: rgba(50, 240, 255, 0.7);
     box-shadow: 0 0 0 3px rgba(50, 240, 255, 0.18);
+  }
+}
+
+@layer utilities {
+  .scroll-container {
+    @apply overflow-y-auto;
+    max-height: calc(100vh - 200px);
+  }
+  .scroll-container-horizontal {
+    @apply overflow-x-auto;
   }
 }
 

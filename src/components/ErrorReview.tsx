@@ -165,62 +165,62 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Operation Complete</h2>
-        <p className="text-gray-600">Review the results of your email draft creation.</p>
+        <h2 className="text-2xl font-bold text-gray-100 mb-2">Operation Complete</h2>
+        <p className="text-gray-400">Review the results of your email draft creation.</p>
       </div>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-gray-900">{results.length}</div>
-          <div className="text-sm text-gray-600">Total Contacts</div>
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <div className="text-2xl font-bold text-gray-100">{results.length}</div>
+          <div className="text-sm text-gray-400">Total Contacts</div>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-600">{completedResults.length}</div>
-          <div className="text-sm text-green-600">Drafts Created</div>
+        <div className="bg-green-900/30 border border-green-800 rounded-lg p-4">
+          <div className="text-2xl font-bold text-green-400">{completedResults.length}</div>
+          <div className="text-sm text-green-400">Drafts Created</div>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-red-600">{failedResults.length}</div>
-          <div className="text-sm text-red-600">Failed</div>
+        <div className="bg-red-900/30 border border-red-800 rounded-lg p-4">
+          <div className="text-2xl font-bold text-red-400">{failedResults.length}</div>
+          <div className="text-sm text-red-400">Failed</div>
         </div>
       </div>
 
       {campaignId && analytics && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">Campaign Automation + Analytics</h3>
+            <h3 className="text-sm font-semibold text-gray-100">Campaign Automation + Analytics</h3>
             <div className="flex items-center gap-2">
               <button onClick={handleExportAudit} className="btn-secondary">Export Audit CSV</button>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-              <p className="text-gray-500">Drafted</p>
-              <p className="text-lg font-semibold text-gray-900">{analytics.drafted}</p>
+            <div className="rounded-md border border-gray-700 bg-gray-700 p-3">
+              <p className="text-gray-400">Drafted</p>
+              <p className="text-lg font-semibold text-gray-100">{analytics.drafted}</p>
             </div>
-            <div className="rounded-md border border-gray-200 bg-blue-50 p-3">
-              <p className="text-blue-700">Queued</p>
-              <p className="text-lg font-semibold text-blue-800">{analytics.queued}</p>
+            <div className="rounded-md border border-gray-700 bg-blue-900/30 p-3">
+              <p className="text-blue-400">Queued</p>
+              <p className="text-lg font-semibold text-blue-300">{analytics.queued}</p>
             </div>
-            <div className="rounded-md border border-gray-200 bg-green-50 p-3">
-              <p className="text-green-700">Automation Complete</p>
-              <p className="text-lg font-semibold text-green-800">{analytics.sent}</p>
+            <div className="rounded-md border border-gray-700 bg-green-900/30 p-3">
+              <p className="text-green-400">Automation Complete</p>
+              <p className="text-lg font-semibold text-green-300">{analytics.sent}</p>
             </div>
-            <div className="rounded-md border border-gray-200 bg-red-50 p-3">
-              <p className="text-red-700">Failed</p>
-              <p className="text-lg font-semibold text-red-800">{analytics.failed}</p>
+            <div className="rounded-md border border-gray-700 bg-red-900/30 p-3">
+              <p className="text-red-400">Failed</p>
+              <p className="text-lg font-semibold text-red-300">{analytics.failed}</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-400">
             <p>Auto-processing rate: {(analytics.sendRate * 100).toFixed(0)}%</p>
             <p>Reply rate tracked: {(analytics.replyRate * 100).toFixed(0)}%</p>
             <p>Avg queue-to-complete: {formatDurationMs(analytics.avgTimeToSendMs)}</p>
             <p>Avg complete-to-reply: {formatDurationMs(analytics.avgTimeToReplyMs)}</p>
           </div>
 
-          <div className="border border-gray-200 rounded-md p-3 space-y-3">
-            <h4 className="text-sm font-medium text-gray-800">Queue Auto-Sorting</h4>
-            <p className="text-xs text-gray-600">
+          <div className="border border-gray-700 rounded-md p-3 space-y-3">
+            <h4 className="text-sm font-medium text-gray-200">Queue Auto-Sorting</h4>
+            <p className="text-xs text-gray-400">
               Schedule moving drafted messages into a campaign folder and optionally tag a category.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -246,28 +246,28 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
               />
             </div>
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-500">{messageIds.length} drafted message(s) eligible.</p>
+              <p className="text-xs text-gray-400">{messageIds.length} drafted message(s) eligible.</p>
               <button onClick={handleQueueAutoSort} className="btn-secondary">Queue Auto-Sort Job</button>
             </div>
-            {jobError && <p className="text-xs text-red-700">{jobError}</p>}
+            {jobError && <p className="text-xs text-red-300">{jobError}</p>}
           </div>
 
           {jobs.length > 0 && (
-            <div className="border border-gray-200 rounded-md">
-              <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 text-sm font-medium text-gray-800">
+            <div className="border border-gray-700 rounded-md">
+              <div className="px-3 py-2 border-b border-gray-700 bg-gray-800 text-sm font-medium text-gray-200">
                 Scheduler Jobs
               </div>
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-700">
                 {jobs.map(job => (
                   <div key={job.id} className="px-3 py-2 flex items-center justify-between text-sm">
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-gray-100">
                         {job.status.toUpperCase()} · {new Date(job.runAt).toLocaleString()}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-400">
                         {job.messageIds.length} msg · folder "{job.folderName}" · attempts {job.attempts}/{job.maxAttempts}
                       </p>
-                      {job.error && <p className="text-xs text-red-700">{job.error}</p>}
+                      {job.error && <p className="text-xs text-red-300">{job.error}</p>}
                     </div>
                     <div className="flex items-center gap-2">
                       {job.status === 'paused' && (
@@ -305,14 +305,14 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
 
       {/* Success Results */}
       {completedResults.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg">
-          <div className="px-4 py-3 bg-green-50 border-b border-green-200">
-            <h3 className="text-sm font-medium text-green-800">
+        <div className="bg-gray-800 border border-gray-700 rounded-lg">
+          <div className="px-4 py-3 bg-green-900/30 border-b border-green-800">
+            <h3 className="text-sm font-medium text-green-300">
               ✅ Successfully Created ({completedResults.length})
             </h3>
           </div>
           <div className="max-h-48 overflow-y-auto">
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-700">
               {completedResults.map((result, index) => (
                 <div key={result.contactId} className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center">
@@ -322,11 +322,11 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">{result.name}</p>
-                      <p className="text-sm text-gray-500">{result.email}</p>
+                      <p className="text-sm font-medium text-gray-100">{result.name}</p>
+                      <p className="text-sm text-gray-400">{result.email}</p>
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-400">
                     Draft created
                   </div>
                 </div>
@@ -338,14 +338,14 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
 
       {/* Failed Results */}
       {failedResults.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg">
-          <div className="px-4 py-3 bg-red-50 border-b border-red-200">
-            <h3 className="text-sm font-medium text-red-800">
+        <div className="bg-gray-800 border border-gray-700 rounded-lg">
+          <div className="px-4 py-3 bg-red-900/30 border-b border-red-800">
+            <h3 className="text-sm font-medium text-red-300">
               ❌ Failed to Create ({failedResults.length})
             </h3>
           </div>
           <div className="max-h-48 overflow-y-auto">
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-700">
               {failedResults.map((result, index) => (
                 <div key={result.contactId} className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center">
@@ -355,11 +355,11 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">{result.name}</p>
-                      <p className="text-sm text-gray-500">{result.email}</p>
+                      <p className="text-sm font-medium text-gray-100">{result.name}</p>
+                      <p className="text-sm text-gray-400">{result.email}</p>
                     </div>
                   </div>
-                  <div className="text-sm text-red-600">
+                  <div className="text-sm text-red-400">
                     {result.error}
                   </div>
                 </div>
@@ -404,16 +404,16 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
       </div>
 
       {/* Next Steps */}
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+      <div className="bg-blue-900/30 border border-blue-800 rounded-md p-4">
         <div className="flex">
           <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+            <svg className="h-5 w-5 text-blue-300" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
           </div>
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-blue-800">Next Steps</h3>
-            <div className="mt-2 text-sm text-blue-700">
+            <h3 className="text-sm font-medium text-blue-200">Next Steps</h3>
+            <div className="mt-2 text-sm text-blue-300">
               <p>
                 {completedResults.length > 0 && (
                   <>✅ {completedResults.length} draft emails have been created in your Outlook. Check your Drafts folder to review and send them.</>

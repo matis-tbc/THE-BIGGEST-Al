@@ -58,11 +58,12 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
       const normalizedContacts: Contact[] = [];
       
       parsedContacts.forEach((contact, index) => {
+        const { name, email, ...rest } = contact;
         normalizedContacts.push({
           id: `contact-${Date.now()}-${index}`,
-          name: contact.name || contact.email,
-          email: contact.email,
-          ...contact
+          name: name || email,
+          email: email,
+          ...rest
         });
       });
 
@@ -209,19 +210,19 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Import Contacts</h2>
-        <p className="text-gray-600">Upload a CSV file with your contact list. Include columns for name, email, and any merge fields.</p>
+        <h2 className="text-2xl font-bold text-gray-100 mb-2">Import Contacts</h2>
+        <p className="text-gray-400">Upload a CSV file with your contact list. Include columns for name, email, and any merge fields.</p>
       </div>
 
       {/* File Upload */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+      <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 bg-gray-900/50">
         <div className="text-center">
           <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <div className="mt-4">
             <label htmlFor="file-upload" className="cursor-pointer">
-              <span className="mt-2 block text-sm font-medium text-gray-900">
+              <span className="mt-2 block text-sm font-medium text-gray-200">
                 {isLoading ? 'Processing...' : 'Upload CSV file'}
               </span>
               <input
@@ -235,7 +236,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
                 disabled={isLoading}
               />
             </label>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-400">
               CSV files only, up to 10MB
             </p>
           </div>
@@ -246,7 +247,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
       <div className="text-center">
         <button
           onClick={downloadSampleCSV}
-          className="text-sm text-primary-600 hover:text-primary-500 font-medium"
+          className="text-sm text-primary-400 hover:text-primary-300 font-medium"
         >
           Download sample CSV format
         </button>
@@ -254,7 +255,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="bg-red-900/30 border border-red-700 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -262,7 +263,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm text-red-200">{error}</p>
             </div>
           </div>
         </div>
@@ -270,7 +271,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+        <div className="bg-yellow-900/30 border border-yellow-700 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
@@ -278,8 +279,8 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">Validation Warnings</h3>
-              <div className="mt-2 text-sm text-yellow-700">
+              <h3 className="text-sm font-medium text-yellow-200">Validation Warnings</h3>
+              <div className="mt-2 text-sm text-yellow-200">
                 <ul className="list-disc list-inside space-y-1">
                   {validationErrors.slice(0, 5).map((error, index) => (
                     <li key={index}>{error}</li>
@@ -296,7 +297,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Contacts Preview */}
       {contacts.length > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
+        <div className="bg-green-900/30 border border-green-700 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -304,10 +305,10 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-green-800">
+              <h3 className="text-sm font-medium text-green-200">
                 {validCount} valid contacts ({invalidCount} invalid)
               </h3>
-              <div className="mt-2 text-sm text-green-700">
+              <div className="mt-2 text-sm text-green-200">
                 <p>Ready to proceed with email template selection.</p>
               </div>
             </div>
@@ -317,10 +318,10 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Contacts Table Preview */}
       {contacts.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <div className="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-gray-800 border-b border-gray-600">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-gray-900">CSV Editor</h3>
+              <h3 className="text-sm font-medium text-gray-200">CSV Editor</h3>
               <div className="flex gap-2">
                 <button onClick={() => applyBulkAction('trim')} className="btn-secondary text-xs">Trim fields</button>
                 <button onClick={() => applyBulkAction('dedupe')} className="btn-secondary text-xs">Remove duplicates</button>
@@ -330,42 +331,42 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)]">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="sticky top-0 bg-gray-800 z-10">
                 <tr>
                   {headers.filter(header => header !== 'id').map(header => (
-                    <th key={header} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th key={header} className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                       {header}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-gray-900 divide-y divide-gray-700">
                 {contacts.map((contact) => (
                   <tr key={contact.id}>
                     {headers.filter(header => header !== 'id').map(header => (
-                      <td key={header} className="px-4 py-2 text-sm text-gray-900">
+                      <td key={header} className="px-4 py-2 text-sm text-gray-100">
                         <input
                           value={contact[header] || ''}
                           onChange={event => handleCellChange(contact.id, header, event.target.value)}
-                          className={`w-full border rounded px-2 py-1 text-sm ${
+                          className={`w-full border rounded px-2 py-1 text-sm text-gray-100 bg-gray-800 ${
                             header === 'email' && contact.email && !validateEmail(contact.email)
-                              ? 'border-red-300 bg-red-50'
-                              : 'border-gray-300'
+                              ? 'border-red-500 bg-red-900/30'
+                              : 'border-gray-600'
                           }`}
                         />
                       </td>
                     ))}
                     <td className="px-4 py-2 text-sm">
                       {validateEmail(contact.email)
-                        ? <span className="text-green-600">Valid</span>
-                        : <span className="text-red-600">Invalid email</span>}
+                        ? <span className="text-green-400">Valid</span>
+                        : <span className="text-red-400">Invalid email</span>}
                     </td>
                     <td className="px-4 py-2 text-sm">
-                      <button onClick={() => handleDeleteRow(contact.id)} className="text-red-600 hover:text-red-500">Delete</button>
+                      <button onClick={() => handleDeleteRow(contact.id)} className="px-2 py-1 rounded border border-red-500 text-red-400 hover:bg-red-500/20 transition-colors">Delete</button>
                     </td>
                   </tr>
                 ))}

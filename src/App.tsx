@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { ContactImport } from './components/ContactImport';
 import { TemplateManager } from './components/TemplateManager';
+import { EnhancedTemplateEditor } from './components/EnhancedTemplateEditor';
 import { AttachmentPicker } from './components/AttachmentPicker';
 import { PreflightReview } from './components/PreflightReview';
 import { BatchProgress } from './components/BatchProgress';
@@ -454,7 +455,7 @@ function App() {
         )}
 
         {/* Main Content */}
-        <div className="card">
+        <div className="card overflow-y-auto max-h-[calc(100vh-200px)]">
           {appState.currentStep === 'home' && (
             <CampaignHome onStartNewCampaign={startNewCampaign} />
           )}
@@ -469,10 +470,53 @@ function App() {
           )}
           
           {appState.currentStep === 'template' && (
-            <TemplateManager 
+            <EnhancedTemplateEditor
+              template={appState.template}
               contacts={appState.contacts}
-              onTemplateSelected={handleTemplateSelected}
-              onBack={() => setAppState(prev => ({ ...prev, currentStep: 'contacts' }))}
+              availableVariables={Array.from(
+                new Set(
+                  appState.contacts.flatMap(contact =>
+                    Object.keys(contact).filter(key => !['id', 'name', 'email'].includes(key))
+                  )
+                )
+              )}
+              onSave={async (template) => {
+                await projectStore.saveTemplate({
+                  id: template.id,
+                  name: template.name,
+                  content: template.content,
+                  variables: template.variables,
+                  versions: [],
+                  category: template.category || '',
+                  tags: template.tags || [],
+                });
+                setAppState(prev => ({ ...prev, template }));
+              }}
+              onDelete={async (templateId) => {
+                await projectStore.deleteTemplate(templateId);
+                if (appState.template?.id === templateId) {
+                  setAppState(prev => ({ ...prev, template: null }));
+                }
+              }}
+              onDuplicate={async (template) => {
+                const duplicated = {
+                  ...template,
+                  id: `template-${Date.now()}`,
+                  name: `${template.name} Copy`,
+                  versions: [],
+                  category: template.category || '',
+                  tags: template.tags || [],
+                };
+                await projectStore.saveTemplate(duplicated);
+              }}
+              onExport={(template) => {
+                // placeholder
+                console.log('Export', template);
+              }}
+              onImport={async (file) => {
+                // placeholder
+                console.log('Import', file);
+              }}
             />
           )}
           

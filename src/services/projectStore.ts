@@ -9,6 +9,8 @@ export interface StoredTemplate {
   name: string;
   content: string;
   variables: string[];
+  category?: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   versions: StoredTemplateVersion[];

@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { extractVariables, mergeTemplate, parseTemplateSections, validateTemplate } from '../utils/templateMerge';
 import { projectStore, StoredTemplate } from '../services/projectStore';
+import { EnhancedTemplateEditor } from './EnhancedTemplateEditor';
 
 interface Contact {
   id: string;
@@ -327,14 +328,14 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
       </div>
 
       {/* Template Upload */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+      <div className="border-2 border-dashed border-gray-600 rounded-lg p-6">
         <div className="text-center">
-          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+          <svg className="mx-auto h-12 w-12 text-gray-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <div className="mt-4">
             <label htmlFor="template-upload" className="cursor-pointer">
-              <span className="mt-2 block text-sm font-medium text-gray-900">
+              <span className="mt-2 block text-sm font-medium text-gray-100">
                 {isLoading ? 'Processing...' : 'Upload template file'}
               </span>
               <input
@@ -348,7 +349,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
                 disabled={isLoading}
               />
             </label>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-400">
               Text files (.txt, .md) only
             </p>
           </div>
@@ -357,11 +358,11 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
 
       {/* Available Variables */}
       {availableVariables.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-          <h3 className="text-sm font-medium text-blue-800 mb-2">Available Variables from Contacts</h3>
+        <div className="bg-blue-900/30 border border-blue-800 rounded-md p-4">
+          <h3 className="text-sm font-medium text-blue-300 mb-2">Available Variables from Contacts</h3>
           <div className="flex flex-wrap gap-2">
             {availableVariables.map(variable => (
-              <span key={variable} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              <span key={variable} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-800/50 text-blue-300">
                 {`{{${variable}}}`}
               </span>
             ))}
@@ -372,21 +373,21 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
       {/* Template List */}
       {templates.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900">Saved Templates</h3>
+          <h3 className="text-lg font-medium text-gray-100">Saved Templates</h3>
           {templates.map(template => (
             <div
               key={template.id}
               className={`border rounded-lg p-4 cursor-pointer transition-colors ${
                 selectedTemplate?.id === template.id
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-primary-500 bg-primary-900/30'
+                  : 'border-gray-600 hover:border-gray-500'
               }`}
               onClick={() => setTemplateAndEditor(template)}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-medium text-gray-900">{template.name}</h4>
-                  <p className="text-sm text-gray-500">
+                  <h4 className="font-medium text-gray-100">{template.name}</h4>
+                  <p className="text-sm text-gray-400">
                     {template.variables.length} variables: {template.variables.map(v => `{{${v}}}`).join(', ')}
                   </p>
                 </div>
@@ -395,7 +396,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
                     type="radio"
                     checked={selectedTemplate?.id === template.id}
                     onChange={() => setTemplateAndEditor(template)}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                    className="h-4 w-4 text-primary-400 focus:ring-primary-500 border-gray-500"
                   />
                 </div>
               </div>
@@ -404,9 +405,9 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Template Editor</h3>
+          <h3 className="text-lg font-medium text-gray-100">Template Editor</h3>
           <div className="flex items-center gap-2">
             <button onClick={handleNewTemplate} className="btn-secondary">New</button>
             <button onClick={handleSaveTemplate} className="btn-secondary">Save</button>
@@ -416,17 +417,17 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
         </div>
 
         <label className="block">
-          <span className="text-sm font-medium text-gray-700">Template Name</span>
+          <span className="text-sm font-medium text-gray-300">Template Name</span>
           <input
             value={editorName}
             onChange={event => setEditorName(event.target.value)}
-            className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="mt-1 w-full border border-gray-600 rounded-md px-3 py-2 text-sm bg-gray-700 text-gray-100"
             placeholder="Spring Intro Campaign"
           />
         </label>
 
         <div className="flex items-center justify-between">
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-300">
             <input type="checkbox" checked={rawMode} onChange={event => setRawMode(event.target.checked)} />
             Raw text mode
           </label>
@@ -440,7 +441,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
             value={rawContent}
             onChange={event => setRawContent(event.target.value)}
             rows={12}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
+            className="w-full border border-gray-600 rounded-md px-3 py-2 text-sm font-mono bg-gray-700 text-gray-100"
             placeholder="Subject: Welcome {{name}}\nTo: {{email}}\n\nHello {{name}}..."
           />
         ) : (
@@ -448,33 +449,33 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
             <input
               value={editorSubject}
               onChange={event => setEditorSubject(event.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-gray-600 rounded-md px-3 py-2 text-sm bg-gray-700 text-gray-100"
               placeholder="Subject (optional)"
             />
             <input
               value={editorTo}
               onChange={event => setEditorTo(event.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-gray-600 rounded-md px-3 py-2 text-sm bg-gray-700 text-gray-100"
               placeholder="To (optional, defaults to contact email)"
             />
             <textarea
               value={editorBody}
               onChange={event => setEditorBody(event.target.value)}
               rows={10}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-gray-600 rounded-md px-3 py-2 text-sm bg-gray-700 text-gray-100"
               placeholder="Email body..."
             />
           </div>
         )}
 
         {selectedTemplate && templates.find(item => item.id === selectedTemplate.id)?.versions.length ? (
-          <div className="border border-gray-200 rounded-md p-3">
-            <p className="text-sm font-medium text-gray-700 mb-2">Version History</p>
+          <div className="border border-gray-700 rounded-md p-3">
+            <p className="text-sm font-medium text-gray-300 mb-2">Version History</p>
             <div className="space-y-2 max-h-32 overflow-y-auto">
               {templates.find(item => item.id === selectedTemplate.id)?.versions.map(version => (
                 <div key={version.id} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">{new Date(version.createdAt).toLocaleString()}</span>
-                  <button onClick={() => handleRestoreVersion(version.id)} className="text-primary-600 hover:text-primary-500">
+                  <span className="text-gray-400">{new Date(version.createdAt).toLocaleString()}</span>
+                  <button onClick={() => handleRestoreVersion(version.id)} className="text-primary-400 hover:text-primary-300">
                     Restore
                   </button>
                 </div>
@@ -486,24 +487,24 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
 
       {/* Template Preview */}
       {selectedTemplate && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Preview with Sample Contact</h3>
-          <div className="bg-white border border-gray-200 rounded p-4 max-h-64 overflow-y-auto">
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-gray-100 mb-3">Preview with Sample Contact</h3>
+          <div className="bg-gray-800 border border-gray-700 rounded p-4 max-h-64 overflow-y-auto">
             {(() => {
               const preview = getPreviewContent({
                 ...selectedTemplate,
                 content: rawMode ? rawContent : buildContentFromStructuredFields(),
               });
               return (
-                <div className="space-y-3 text-sm text-gray-700">
+                <div className="space-y-3 text-sm text-gray-300">
                   {preview.subject && (
                     <div>
-                      <span className="font-semibold text-gray-800">Subject:</span> {preview.subject}
+                      <span className="font-semibold text-gray-200">Subject:</span> {preview.subject}
                     </div>
                   )}
                   {preview.to && (
                     <div>
-                      <span className="font-semibold text-gray-800">To:</span> {preview.to}
+                      <span className="font-semibold text-gray-200">To:</span> {preview.to}
                     </div>
                   )}
                   <div className="whitespace-pre-wrap">{preview.body}</div>
@@ -515,15 +516,15 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
       )}
 
       {(validation.errors.length > 0 || validation.warnings.length > 0) && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <h3 className="text-sm font-medium text-yellow-800">Template Checks</h3>
+        <div className="bg-yellow-900/30 border border-yellow-800 rounded-md p-4">
+          <h3 className="text-sm font-medium text-yellow-300">Template Checks</h3>
           {validation.errors.length > 0 && (
-            <ul className="mt-2 text-sm text-yellow-900 list-disc list-inside">
+            <ul className="mt-2 text-sm text-yellow-300 list-disc list-inside">
               {validation.errors.map(item => <li key={item}>{item}</li>)}
             </ul>
           )}
           {validation.warnings.length > 0 && (
-            <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside">
+            <ul className="mt-2 text-sm text-yellow-400 list-disc list-inside">
               {validation.warnings.slice(0, 4).map(item => <li key={item}>{item}</li>)}
             </ul>
           )}
@@ -532,15 +533,15 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="bg-red-900/30 border border-red-800 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="h-5 w-5 text-red-300" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm text-red-200">{error}</p>
             </div>
           </div>
         </div>

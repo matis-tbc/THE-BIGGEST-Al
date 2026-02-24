@@ -113,28 +113,28 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Creating Draft Emails</h2>
-        <p className="text-gray-600">
+        <h2 className="text-2xl font-bold text-gray-100 mb-2">Creating Draft Emails</h2>
+        <p className="text-gray-400">
           Processing {contacts.length} contacts in {totalBatches} batches of up to 20 emails each.
         </p>
       </div>
 
       {/* Progress Overview */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Progress</h3>
-          <span className="text-sm text-gray-500">
+          <h3 className="text-lg font-medium text-gray-100">Progress</h3>
+          <span className="text-sm text-gray-400">
             Batch {currentBatch} of {totalBatches}
           </span>
         </div>
 
         {/* Progress Bar */}
         <div className="mb-4">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
+          <div className="flex justify-between text-sm text-gray-400 mb-2">
             <span>{completedCount + failedCount} of {contacts.length} processed</span>
             <span>{Math.round(progressPercentage)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-700 rounded-full h-2">
             <div 
               className="bg-primary-600 h-2 rounded-full transition-all duration-300"
               style={{ width: `${progressPercentage}%` }}
@@ -144,32 +144,32 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
 
         {/* Status Counts */}
         <div className="grid grid-cols-4 gap-4 text-center">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="text-2xl font-bold text-gray-500">{pendingCount}</div>
-            <div className="text-sm text-gray-600">Pending</div>
+          <div className="bg-gray-700 rounded-lg p-3">
+            <div className="text-2xl font-bold text-gray-400">{pendingCount}</div>
+            <div className="text-sm text-gray-400">Pending</div>
           </div>
-          <div className="bg-blue-50 rounded-lg p-3">
-            <div className="text-2xl font-bold text-blue-600">{processingCount}</div>
-            <div className="text-sm text-blue-600">Processing</div>
+          <div className="bg-blue-900/30 rounded-lg p-3">
+            <div className="text-2xl font-bold text-blue-400">{processingCount}</div>
+            <div className="text-sm text-blue-400">Processing</div>
           </div>
-          <div className="bg-green-50 rounded-lg p-3">
-            <div className="text-2xl font-bold text-green-600">{completedCount}</div>
-            <div className="text-sm text-green-600">Completed</div>
+          <div className="bg-green-900/30 rounded-lg p-3">
+            <div className="text-2xl font-bold text-green-400">{completedCount}</div>
+            <div className="text-sm text-green-400">Completed</div>
           </div>
-          <div className="bg-red-50 rounded-lg p-3">
-            <div className="text-2xl font-bold text-red-600">{failedCount}</div>
-            <div className="text-sm text-red-600">Failed</div>
+          <div className="bg-red-900/30 rounded-lg p-3">
+            <div className="text-2xl font-bold text-red-400">{failedCount}</div>
+            <div className="text-sm text-red-400">Failed</div>
           </div>
         </div>
       </div>
 
       {/* Processing Details */}
-      <div className="bg-white border border-gray-200 rounded-lg">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <h3 className="text-sm font-medium text-gray-900">Contact Status</h3>
+      <div className="bg-gray-800 border border-gray-700 rounded-lg">
+        <div className="px-4 py-3 bg-gray-700 border-b border-gray-600">
+          <h3 className="text-sm font-medium text-gray-100">Contact Status</h3>
         </div>
         <div className="max-h-64 overflow-y-auto">
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-700">
             {statuses.map((status, index) => {
               const contact = contacts.find(c => c.id === status.contactId);
               if (!contact) return null;
@@ -198,11 +198,11 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
                       )}
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">{contact.name}</p>
-                      <p className="text-sm text-gray-500">{contact.email}</p>
+                      <p className="text-sm font-medium text-gray-100">{contact.name}</p>
+                      <p className="text-sm text-gray-400">{contact.email}</p>
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-400">
                     {status.status === 'completed' && 'Draft created'}
                     {status.status === 'failed' && status.error}
                     {status.status === 'processing' && 'Creating draft...'}
@@ -217,15 +217,15 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="bg-red-900/30 border border-red-800 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="h-5 w-5 text-red-300" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm text-red-200">{error}</p>
             </div>
           </div>
         </div>
