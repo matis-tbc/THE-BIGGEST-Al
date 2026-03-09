@@ -31,6 +31,7 @@ export class GraphClientService {
     }
 
     try {
+      if (!window.electronAPI) throw new Error("Electron API is unavailable");
       const newTokens = await window.electronAPI.refreshToken(this.tokens.refreshToken);
       this.tokens = newTokens;
       return newTokens;
@@ -40,13 +41,17 @@ export class GraphClientService {
     }
   }
 
-  async createDraft(subject: string, body: string, toEmails: string[]): Promise<string> {
+  async createDraft(subject: string, body: string, toEmails: string[], ccEmails: string[] = []): Promise<string> {
     try {
       const recipients = toEmails.map(address => ({
         emailAddress: { address }
       }));
 
-      const message = {
+      const ccRecipients = ccEmails.map(address => ({
+        emailAddress: { address }
+      }));
+
+      const message: any = {
         subject,
         body: {
           contentType: 'HTML',
@@ -54,6 +59,10 @@ export class GraphClientService {
         },
         toRecipients: recipients
       };
+
+      if (ccRecipients.length > 0) {
+        message.ccRecipients = ccRecipients;
+      }
 
       const response = await this.client.api('/me/messages').post(message);
       return response.id;
@@ -83,6 +92,9 @@ export class GraphClientService {
   }
 
   async uploadFileChunk(uploadUrl: string, chunk: ArrayBuffer, rangeStart: number, rangeEnd: number, totalSize: number): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout to prevent hanging connections
+
     try {
       const response = await fetch(uploadUrl, {
         method: 'PUT',
@@ -90,70 +102,44 @@ export class GraphClientService {
           'Content-Length': (rangeEnd - rangeStart + 1).toString(),
           'Content-Range': `bytes ${rangeStart}-${rangeEnd}/${totalSize}`,
         },
-        body: chunk
+        body: chunk,
+        signal: controller.signal
       });
 
+      clearTimeout(timeout);
+
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
+      clearTimeout(timeout);
       console.error('Chunk upload failed:', error);
       throw error;
     }
   }
 
-  async createBatchDrafts(drafts: Array<{subject: string, body: string, toEmails: string[]}>): Promise<Array<{id: string, success: boolean, error?: string}>> {
-    try {
-      const requests = drafts.map((draft, index) => ({
-        id: (index + 1).toString(),
-        method: 'POST',
-        url: '/me/messages',
-        body: {
-          subject: draft.subject,
-          body: {
-            contentType: 'HTML',
-            content: draft.body
-          },
-          toRecipients: draft.toEmails.map(address => ({
-            emailAddress: { address }
-          }))
-        },
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }));
+  async createBatchDrafts(drafts: Array<{ subject: string, body: string, toEmails: string[], ccEmails?: string[] }>): Promise<Array<{ id: string, success: boolean, error?: string }>> {
+    const results: Array<{ id: string, success: boolean, error?: string }> = [];
 
-      const batchRequest = {
-        requests
-      };
-
-      const response = await this.client.api('/$batch').post(batchRequest);
-
-      const responseMap = new Map<string, any>();
-      response.responses.forEach((resp: any) => {
-        responseMap.set(resp.id, resp);
-      });
-
-      return drafts.map((_, index) => {
-        const requestId = (index + 1).toString();
-        const resp = responseMap.get(requestId);
-        if (!resp) {
-          return { id: '', success: false, error: 'Missing batch response' };
-        }
-
-        const messageId = resp.body?.id;
-        const success = resp.status >= 200 && resp.status < 300 && Boolean(messageId);
-        const error = resp.status >= 400 ? resp.body?.error?.message : (!messageId ? 'Missing message id' : undefined);
-
-        return { id: messageId || '', success, error };
-      });
-    } catch (error) {
-      console.error('Batch draft creation failed:', error);
-      throw error;
+    // Execute strictly sequentially to avoid Microsoft Graph MailboxConcurrency throttling (limit: 4 concurrent)
+    for (const draft of drafts) {
+      try {
+        const id = await this.createDraft(draft.subject, draft.body, draft.toEmails, draft.ccEmails);
+        results.push({ id, success: true });
+      } catch (error: any) {
+        // We capture individual failures to not break the entire batch flow
+        results.push({
+          id: '',
+          success: false,
+          error: error.message || 'Failed to create draft'
+        });
+      }
     }
+
+    return results;
   }
 
-  async getUserInfo(): Promise<{displayName: string, mail: string}> {
+  async getUserInfo(): Promise<{ displayName: string, mail: string }> {
     try {
       const response = await this.client.api('/me').get();
       return {
@@ -168,7 +154,7 @@ export class GraphClientService {
 }
 
 class CustomAuthProvider implements AuthenticationProvider {
-  constructor(private graphService: GraphClientService) {}
+  constructor(private graphService: GraphClientService) { }
 
   async getAccessToken(): Promise<string> {
     const tokens = await this.graphService.getTokens();

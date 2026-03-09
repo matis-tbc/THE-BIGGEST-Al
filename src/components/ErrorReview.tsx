@@ -141,12 +141,12 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = `email-drafter-results-${operationId}.csv`;
     link.click();
-    
+
     URL.revokeObjectURL(url);
   };
 
@@ -313,7 +313,7 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
           </div>
           <div className="max-h-48 overflow-y-auto">
             <div className="divide-y divide-gray-700">
-              {completedResults.map((result, index) => (
+              {completedResults.map((result) => (
                 <div key={result.contactId} className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
@@ -346,7 +346,7 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, campaignI
           </div>
           <div className="max-h-48 overflow-y-auto">
             <div className="divide-y divide-gray-700">
-              {failedResults.map((result, index) => (
+              {failedResults.map((result) => (
                 <div key={result.contactId} className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">

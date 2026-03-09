@@ -57,11 +57,11 @@ export class AttachmentHandler {
     }
   }
 
-  async attachFileToMultipleDrafts(messageIds: string[], file: File): Promise<Array<{messageId: string, success: boolean, error?: string}>> {
-    const results: Array<{messageId: string, success: boolean, error?: string}> = [];
+  async attachFileToMultipleDrafts(messageIds: string[], file: File): Promise<Array<{ messageId: string, success: boolean, error?: string }>> {
+    const results: Array<{ messageId: string, success: boolean, error?: string }> = [];
 
-    // Process attachments in parallel (max 3 at a time)
-    const concurrency = 3;
+    // Process attachments sequentially to prevent MailboxConcurrency errors
+    const concurrency = 1;
     const chunks = this.chunkArray(messageIds, concurrency);
 
     for (const chunk of chunks) {
@@ -71,16 +71,19 @@ export class AttachmentHandler {
           return { messageId, success: true };
         } catch (error) {
           console.error(`Attachment failed for message ${messageId}:`, error);
-          return { 
-            messageId, 
-            success: false, 
-            error: error instanceof Error ? error.message : 'Unknown error' 
+          return {
+            messageId,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
           };
         }
       });
 
       const chunkResults = await Promise.all(promises);
       results.push(...chunkResults);
+
+      // Artificial delay to prevent Graph from maintaining multiple locks
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     return results;

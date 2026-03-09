@@ -16,6 +16,7 @@ export class TokenManager {
 
   async initialize(): Promise<boolean> {
     try {
+      if (!window.electronAPI) return false;
       const tokens = await window.electronAPI.getTokens();
       if (tokens) {
         await this.graphService.initialize(tokens);

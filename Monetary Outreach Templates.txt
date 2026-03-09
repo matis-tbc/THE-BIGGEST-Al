@@ -1,0 +1,156 @@
+Digikey
+Dear {{First Name}},
+
+My name is {{Sender Name}}, and I am a part of CU Hyperloop, a dynamic student team at the University of Colorado Boulder that designs and builds an innovative tunnel boring machine every year. Our 12-ft long, 2000lb TBM designs previously earned us 2nd place in the world at The Boring Company’s Not-A-Boring Competition, and we are poised to push even further this year. We are reaching out because since the club’s beginning in 2017, Digikey has been one of the primary providers of electrical and mechanical components for our projects, and we believe you would be an invaluable partner for this year's success. 
+
+By providing this support, you would enable a team that is already deeply familiar with your product line to achieve global success. This support takes many forms, from in-kind donations of components and discounts to direct monetary sponsorship. In return, your partnership grants you exclusive recruitment access to our top engineers; prominent brand visibility with the Digikey logo on our TBM and all competition media; and alignment with a cutting-edge technical innovation project.
+
+As a registered 501(c)(3), any sponsorship is tax-deductible. Attached is a detailed sponsorship deck outlining these benefits and tiers. Would you have any time this week for a brief call?
+
+Sincerely,
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}
+
+
+The Robbins Company
+Dear {{First Name}},
+
+My name is {{Sender Name}} with CU Hyperloop at the University of Colorado Boulder. As a student team dedicated to pushing the boundaries of autonomous tunneling, we have long looked to The Robbins Company as the ultimate benchmark for TBM engineering and grit.
+
+Our team designs and builds a 12-foot-long, 2,500lb TBM to compete on the world stage. Following our 2nd-place finish at The Boring Company’s Not-A-Boring Competition, we are currently engineering our next-generation machine. We are reaching out because we believe a partnership with Robbins would bridge the gap between your decades of industry-defining expertise and our student-led technical innovation.
+
+While our scale is smaller, our engineering challenges are remarkably similar to the ones Robbins solves globally. By supporting our team, you are directly fostering the next generation of engineers who are already familiar with problems related to cutterhead torque, thrust systems, and autonomous steering.
+
+In return, Robbins would be given exclusive access to a pool of CU Boulder’s top engineering talent and prominent brand visibility with your logo.
+
+As a registered 501(c)(3), any sponsorship is tax-deductible. I have attached our sponsorship deck, which outlines our technical goals and various partnership tiers.
+
+Would you be open to a brief call this week to discuss how we can represent Robbins at this year’s competition?
+
+Sincerely,
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}
+
+
+General Tunneling 1
+Hello {{First Name}},
+
+My name is {{Sender Name}}, and I’m with CU Hyperloop, a student engineering team at the University of Colorado Boulder that designs and builds a fully functional tunnel boring machine each year. Our 12-foot, 2,000-pound TBM earned 2nd place globally at The Boring Company’s Not-A-Boring Competition, and we’re continuing to push boundaries in tunneling innovation.
+
+We are reaching out to {{Company}} because we believe there is a profound technical alignment between your industry-defining expertise in tunneling and our mission to innovate within the trenchless sector. Beyond a traditional sponsorship, we view this as a strategic investment in the future of the tunneling workforce. By supporting our design and testing efforts, you gain a direct pipeline to a curated group of high-performing engineers who are already solving real-world challenges in cutterhead torque, autonomous steering, and structural integrity. Your partnership would bridge the gap between classroom theory and the grit required for large-scale underground infrastructure, ensuring that the next generation of engineers is trained on the same standards of excellence that {{Company}} represents.
+
+As a registered 501(c)(3) organization, all sponsorships are tax-deductible. I have attached our sponsorship packet, which outlines our technical milestones and specific partnership tiers.
+
+Would you be open to a brief call this week to discuss how we can represent {{Company}} at this year’s competition?
+
+Best regards,
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}
+
+
+Skanska
+Hello Skanska Team,
+
+My name is {{Sender Name}}, and I’m with CU Hyperloop, a premier student engineering team at the University of Colorado Boulder. We design, manufacture, and operate a fully autonomous Tunnel Boring Machine (TBM) to compete in The Boring Company’s international Not-A-Boring Competition.
+
+I am reaching out because Skanska’s global leadership in complex infrastructure and commitment to sustainable construction deeply resonates with our mission. We are currently seeking monetary sponsorship to fuel our 2026–2027 development cycle, and we believe there is a powerful alignment between our hands-on research and your dedication to "building for a better society." 
+
+Our team consists of approximately 50–70 student engineers who manage the entire lifecycle of a 2,000 lb, 12-foot-long TBM. We don't just design on paper, we build hardware that competes at the highest global level. We are consistently ranked among the top teams globally, recently taking 2nd Place in the World and winning the Innovation Award for our unique propulsion system at the 2024 competition. 
+
+As a registered 501(c)(3), any sponsorship is tax-deductible. I have attached our sponsorship deck, which outlines our technical goals and various partnership tiers.
+
+Would you be open to a short call this week to discuss how Skanska can help us pave the way for a more efficient and sustainable future? If you are not the best contact for sponsorship inquiries, I would greatly appreciate it if you could point me toward the right person.
+
+Thank you for your time and for supporting the next generation of engineers.
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}
+
+
+3M
+Dear {{First Name}},
+
+My name is {{Sender Name}}, and I am a part of CU Hyperloop, a student engineering team at the University of Colorado Boulder. Each year, we design and manufacture a 12-foot, 2,000-pound autonomous Tunnel Boring Machine (TBM) to compete on the global stage. After placing 2nd in the world at The Boring Company’s Not-A-Boring Competition, we are now focused on pushing the limits of material durability and system reliability.
+
+We are reaching out to 3M because our TBM must maintain high precision while operating in challenging underground conditions. Our machine faces constant vibration and debris, requiring the kind of durable adhesives, coatings, and thermal management solutions that 3M pioneered. We believe your expertise in materials science is a natural fit for our project, as we look to improve the resilience and reliability of our systems for this year’s competition. By partnering with us, 3M is directly enabling a project that tests the boundaries of what your materials can achieve in the field.
+
+Beyond the technical application, this partnership offers 3M a direct connection to a group of CU Boulder’s top-tier engineers who are already applying 3M’s "Science. Applied to Life." philosophy to complex mechanical challenges.
+
+As a registered 501(c)(3), all sponsorships are tax-deductible. I’ve attached our sponsorship packet, which outlines our 2025 design goals and various partnership tiers.
+
+Would you be open to a short call this week to discuss how 3M can help us engineer a more resilient machine for this year’s competition?
+
+Best regards,
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}
+
+
+Exxon
+Hello ExxonMobil team,
+
+My name is {{Sender Name}}, and I am a member of CU Hyperloop at the University of Colorado Boulder. We are a multidisciplinary, student-run engineering organization composed of approximately 40 undergraduate and graduate students. Each year, our team designs, builds, and tests a small-scale tunnel boring machine, managing the full project lifecycle from mechanical and electrical design to controls, software, PCB layout, and manufacturing.
+
+Our previous 12-foot, 2,000-pound TBM earned 2nd place globally in The Boring Company’s Not-A-Boring Competition and received the Innovation Award for our propulsion system. These achievements reflect both the technical depth of our team and our commitment to solving complex, real-world engineering challenges.
+
+Given ExxonMobil’s leadership in large-scale engineering, infrastructure, and energy systems, we see strong alignment between your organization’s mission and our work. CU Hyperloop provides students with hands-on experience in systems engineering, project management, and applied problem-solving skills directly relevant to the work performed at ExxonMobil. A partnership would offer ExxonMobil exclusive access to motivated, highly capable engineering and business talent while supporting the development of next-generation technical leaders.
+
+We are a registered 501(c)(3) organization meaning any contribution can be tax deductible. We also offer logo placement on our TBM and team apparel, and of course, recruitment access to our engineering and business talent, all outlined in the attached packet. 
+
+Would you be open to a brief 20–30 minute conversation this week or next to discuss potential sponsorship opportunities?
+
+Best regards,
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}
+
+
+Delve Underground
+Hello Delve Underground team, 
+
+I'm {{Sender Name}} and I'm part of CU Hyperloop at the University of Colorado Boulder. Each year, our 40-member student engineering team designs and builds a small-scale tunnel-boring machine, handling everything from mechanical and electrical design to software, GNC, PCB layout, and manufacturing. Previously, our 12-ft, 2,000 lb TBM earned 2nd place globally in The Boring Company’s Not-A-Boring Competition and won the Innovation Award for our propulsion system. 
+
+Given Delve Underground’s industry leadership in tunnel design and underground engineering, we see a strong alignment between your team’s mission and ours. CU Hyperloop consists of CU Boulder’s most committed engineering students, dedicated to building the future of U.S tunneling technology. Through this project, our team is developing the very technical and problem-solving skillsets essential to the work you do. A partnership would give Delve Underground direct access to passionate, innovative, and highly capable emerging engineering talent. In return, we are seeking financial sponsorship and professional guidance to help us continue our trajectory of growth, creativity, and project success.
+
+We are a registered 501(c)(3) organization, meaning any contribution can be tax-deductible. We also offer logo placement on our TBM and team apparel, and of course, recruitment access to our engineering and business talent, all outlined in the attached packet. Would you have 20–30 minutes this week or next to discuss this in more detail? 
+
+Best regards,
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}
+
+
+Amtrak
+Hello {{First Name}},
+
+My name is {{Sender Name}}, and I’m with CU Hyperloop, a student engineering team at the University of Colorado Boulder that designs and builds a fully functional tunnel boring machine each year. Our 12-foot, 2,000-pound TBM earned 2nd place globally at The Boring Company’s Not-A-Boring Competition, and we’re continuing to push boundaries in tunneling innovation.
+
+We are reaching out to you because we believe our mission aligns directly with Amtrak’s goals of modernization and operational excellence. By supporting our team, Amtrak is making a strategic investment in the future of the rail workforce. We provide a direct pipeline to high-performing engineers who are already solving complex challenges in tunneling automation, structural integrity, and remote monitoring—the exact skills required to deliver and maintain America's busiest rail corridors. Your partnership would bridge the gap between classroom theory and the grit required for large-scale underground infrastructure, ensuring that the next generation of engineers is trained on the same standards of excellence that Amtrak represents.
+
+As a registered 501(c)(3) organization, all sponsorships are tax-deductible. I have attached our sponsorship packet, which outlines our technical milestones and specific partnership tiers.
+
+Would you be open to a brief call this week to discuss how we can represent Amtrak at this year’s competition?
+
+Best regards,
+
+{{Sender Name}}
+CU Hyperloop | {{Sender Role}}
+CU Boulder | {{Sender Major}}
+{{Sender Phone}} | {{Sender Email}}

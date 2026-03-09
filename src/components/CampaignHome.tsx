@@ -4,6 +4,7 @@ import { listSchedulerJobs } from '../services/schedulerService';
 
 interface CampaignHomeProps {
   onStartNewCampaign: () => void;
+  onManageMembers: () => void;
 }
 
 interface CampaignCardData {
@@ -27,7 +28,7 @@ function statusBadge(status: CampaignRecord['status']): string {
   return 'bg-slate-700/70 text-slate-200 border border-slate-500/60';
 }
 
-export const CampaignHome: React.FC<CampaignHomeProps> = ({ onStartNewCampaign }) => {
+export const CampaignHome: React.FC<CampaignHomeProps> = ({ onStartNewCampaign, onManageMembers }) => {
   const [cards, setCards] = useState<CampaignCardData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -86,8 +87,8 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onStartNewCampaign }
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-gray-900">Campaign Home</h2>
-        <p className="text-gray-600">Loading campaign history...</p>
+        <h2 className="text-2xl font-bold text-white">Campaign Home</h2>
+        <p className="text-slate-400">Loading campaign history...</p>
       </div>
     );
   }
@@ -96,50 +97,55 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onStartNewCampaign }
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Campaign Home</h2>
-          <p className="text-gray-600">View drafted and scheduled campaigns, automation jobs, and lifecycle metrics.</p>
+          <h2 className="text-2xl font-bold text-white">Campaign Home</h2>
+          <p className="text-slate-400">View drafted and scheduled campaigns, automation jobs, and lifecycle metrics.</p>
         </div>
-        <button onClick={onStartNewCampaign} className="btn-primary">
-          Start New Campaign
-        </button>
+        <div className="flex gap-3">
+          <button onClick={onManageMembers} className="btn-secondary">
+            Manage Sender Profiles
+          </button>
+          <button onClick={onStartNewCampaign} className="btn-primary">
+            Start New Campaign
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="rounded-md border border-gray-200 bg-white p-3">
-          <p className="text-xs text-gray-500">Campaigns</p>
-          <p className="text-xl font-semibold text-gray-900">{totals.campaigns}</p>
+        <div className="card !p-4">
+          <p className="text-xs text-slate-400">Campaigns</p>
+          <p className="text-2xl font-semibold text-white mt-1">{totals.campaigns}</p>
         </div>
-        <div className="rounded-md border border-gray-200 bg-white p-3">
-          <p className="text-xs text-gray-500">Drafted</p>
-          <p className="text-xl font-semibold text-gray-900">{totals.drafted}</p>
+        <div className="card !p-4">
+          <p className="text-xs text-slate-400">Drafted</p>
+          <p className="text-2xl font-semibold text-white mt-1">{totals.drafted}</p>
         </div>
-        <div className="rounded-md border border-cyan-200 bg-cyan-50 p-3">
-          <p className="text-xs text-cyan-700">Queued</p>
-          <p className="text-xl font-semibold text-cyan-900">{totals.queued}</p>
+        <div className="card !p-4 !border-cyan-500/30">
+          <p className="text-xs text-cyan-400">Queued</p>
+          <p className="text-2xl font-semibold text-cyan-50 mt-1">{totals.queued}</p>
         </div>
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
-          <p className="text-xs text-emerald-700">Auto-Sorted</p>
-          <p className="text-xl font-semibold text-emerald-900">{totals.automated}</p>
+        <div className="card !p-4 !border-emerald-500/30">
+          <p className="text-xs text-emerald-400">Auto-Sorted</p>
+          <p className="text-2xl font-semibold text-emerald-50 mt-1">{totals.automated}</p>
         </div>
-        <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
-          <p className="text-xs text-rose-700">Failures</p>
-          <p className="text-xl font-semibold text-rose-900">{totals.failed}</p>
+        <div className="card !p-4 !border-rose-500/30">
+          <p className="text-xs text-rose-400">Failures</p>
+          <p className="text-2xl font-semibold text-rose-50 mt-1">{totals.failed}</p>
         </div>
       </div>
 
       {cards.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center">
-          <p className="text-sm text-gray-600 mb-3">No campaigns yet. Create your first draft run to start tracking lifecycle data.</p>
+        <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center bg-slate-800/50">
+          <p className="text-sm text-slate-400 mb-4">No campaigns yet. Create your first draft run to start tracking lifecycle data.</p>
           <button onClick={onStartNewCampaign} className="btn-secondary">Import Contacts</button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {cards.map(({ campaign, analytics, schedulerSummary }) => (
-            <div key={campaign.id} className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            <div key={campaign.id} className="card">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-700 pb-3 mb-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">{campaign.name}</h3>
-                  <p className="text-xs text-gray-500">Updated {new Date(campaign.updatedAt).toLocaleString()}</p>
+                  <h3 className="text-base font-semibold text-white">{campaign.name}</h3>
+                  <p className="text-xs text-slate-400 mt-1">Updated {new Date(campaign.updatedAt).toLocaleString()}</p>
                 </div>
                 <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusBadge(campaign.status)}`}>
                   {campaign.status.toUpperCase()}
@@ -147,18 +153,41 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onStartNewCampaign }
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mt-3 text-xs">
-                <div className="rounded border border-gray-200 px-2 py-1">Drafted: <span className="font-medium">{analytics.drafted}</span></div>
-                <div className="rounded border border-gray-200 px-2 py-1">Queued: <span className="font-medium">{analytics.queued}</span></div>
-                <div className="rounded border border-gray-200 px-2 py-1">Auto-Sorted: <span className="font-medium">{analytics.sent}</span></div>
-                <div className="rounded border border-gray-200 px-2 py-1">Failed: <span className="font-medium">{analytics.failed}</span></div>
-                <div className="rounded border border-gray-200 px-2 py-1">Scheduler Jobs: <span className="font-medium">{schedulerSummary.total}</span></div>
-                <div className="rounded border border-gray-200 px-2 py-1">Success Rate: <span className="font-medium">{(analytics.sendRate * 100).toFixed(0)}%</span></div>
+                <div className="rounded-lg bg-slate-800/80 px-3 py-2">
+                  <span className="block text-slate-400 mb-1">Drafted</span>
+                  <span className="font-semibold text-slate-200 text-sm">{analytics.drafted}</span>
+                </div>
+                <div className="rounded-lg bg-slate-800/80 px-3 py-2">
+                  <span className="block text-slate-400 mb-1">Queued</span>
+                  <span className="font-semibold text-slate-200 text-sm">{analytics.queued}</span>
+                </div>
+                <div className="rounded-lg bg-slate-800/80 px-3 py-2">
+                  <span className="block text-slate-400 mb-1">Auto-Sorted</span>
+                  <span className="font-semibold text-slate-200 text-sm">{analytics.sent}</span>
+                </div>
+                <div className="rounded-lg bg-slate-800/80 px-3 py-2">
+                  <span className="block text-slate-400 mb-1">Failed</span>
+                  <span className="font-semibold text-rose-400 text-sm">{analytics.failed}</span>
+                </div>
+                <div className="rounded-lg bg-slate-800/80 px-3 py-2">
+                  <span className="block text-slate-400 mb-1">Jobs</span>
+                  <span className="font-semibold text-slate-200 text-sm">{schedulerSummary.total}</span>
+                </div>
+                <div className="rounded-lg bg-slate-800/80 px-3 py-2">
+                  <span className="block text-slate-400 mb-1">Success</span>
+                  <span className="font-semibold text-yellow-500 text-sm">{(analytics.sendRate * 100).toFixed(0)}%</span>
+                </div>
               </div>
 
               {schedulerSummary.total > 0 && (
-                <p className="text-xs text-gray-500 mt-2">
-                  Jobs: queued {schedulerSummary.queued}, running {schedulerSummary.running}, completed {schedulerSummary.completed}, failed {schedulerSummary.failed}, paused {schedulerSummary.paused}
-                </p>
+                <div className="mt-3 text-xs text-slate-400 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                  Jobs Status: Queued <span className="text-white">{schedulerSummary.queued}</span> •
+                  Running <span className="text-white">{schedulerSummary.running}</span> •
+                  Completed <span className="text-white">{schedulerSummary.completed}</span> •
+                  Failed <span className="text-rose-400">{schedulerSummary.failed}</span> •
+                  Paused <span className="text-white">{schedulerSummary.paused}</span>
+                </div>
               )}
             </div>
           ))}

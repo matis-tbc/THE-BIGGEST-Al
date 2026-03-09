@@ -1,11 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { parseCSV, validateEmail } from '../utils/csvParser';
+import { useEffect, useState, useRef } from "react";
+import { parseCSV, validateEmail } from "../utils/csvParser";
+import { projectStore, StoredTemplate } from "../services/projectStore";
 
 interface Contact {
   id: string;
   name: string;
   email: string;
-  [key: string]: string;
+  templateId?: string | null;
+  [key: string]: string | null | undefined;
 }
 
 interface ContactImportProps {
@@ -13,13 +15,29 @@ interface ContactImportProps {
   onBack: () => void;
 }
 
-export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported, onBack }) => {
+export const ContactImport: React.FC<ContactImportProps> = ({
+  onContactsImported,
+  onBack,
+}) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<StoredTemplate[]>([]);
+
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [bulkEditField, setBulkEditField] = useState<string>("");
+  const [bulkEditValue, setBulkEditValue] = useState<string>("");
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragSelectMode, setDragSelectMode] = useState(true);
+
+  useEffect(() => {
+    projectStore.listTemplates().then(setTemplates).catch(console.error);
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const revalidate = (nextContacts: Contact[]) => {
     const errors: string[] = [];
@@ -31,12 +49,14 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
       if (contact.email && emailSet.has(contact.email.toLowerCase())) {
         errors.push(`Row ${index + 2}: Duplicate email "${contact.email}"`);
       }
-      emailSet.add((contact.email || '').toLowerCase());
+      emailSet.add((contact.email || "").toLowerCase());
     });
     setValidationErrors(errors);
   };
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -46,49 +66,73 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
     try {
       const text = await file.text();
-      const parsedContacts = parseCSV(text);
+      const parsedContacts = await parseCSV(text);
+      const currentTemplates = await projectStore.listTemplates();
+
       const discoveredHeaders = Array.from(
-        parsedContacts.reduce((acc, contact) => {
-          Object.keys(contact).forEach(key => acc.add(key));
-          return acc;
-        }, new Set<string>(['name', 'email']))
+        parsedContacts.reduce(
+          (acc, contact) => {
+            Object.keys(contact).forEach((key) => acc.add(key));
+            return acc;
+          },
+          new Set<string>(["name", "email"]),
+        ),
       );
       setHeaders(discoveredHeaders);
-      
+
       const normalizedContacts: Contact[] = [];
-      
+
       parsedContacts.forEach((contact, index) => {
-        const { name, email, ...rest } = contact;
+        const { name, email, templateId, ...rest } = contact;
+        const cleanRest: Record<string, string> = {};
+        let mappedTemplateId = templateId || undefined;
+
+        for (const [k, v] of Object.entries(rest)) {
+          if (v !== null && v !== undefined) {
+            cleanRest[k] = v;
+            if (k.toLowerCase() === 'template' && !mappedTemplateId && typeof v === 'string' && v.trim()) {
+              const searchLower = v.trim().toLowerCase();
+              const found = currentTemplates.find(t => {
+                const templateLower = t.name.toLowerCase();
+                return templateLower === searchLower ||
+                  templateLower.includes(searchLower) ||
+                  searchLower.includes(templateLower);
+              });
+              if (found) mappedTemplateId = found.id;
+            }
+          }
+        }
         normalizedContacts.push({
           id: `contact-${Date.now()}-${index}`,
           name: name || email,
           email: email,
-          ...rest
+          templateId: mappedTemplateId,
+          ...cleanRest,
         });
       });
 
       setContacts(normalizedContacts);
       revalidate(normalizedContacts);
-      
+
       if (normalizedContacts.length === 0) {
-        setError('No valid contacts found. Please check your CSV format.');
+        setError("No valid contacts found. Please check your CSV format.");
       }
     } catch (err) {
-      console.error('CSV parsing error:', err);
-      setError('Failed to parse CSV file. Please check the format.');
+      console.error("CSV parsing error:", err);
+      setError("Failed to parse CSV file. Please check the format.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCellChange = (contactId: string, key: string, value: string) => {
-    const next = contacts.map(contact => {
+    const next = contacts.map((contact) => {
       if (contact.id !== contactId) return contact;
       const updated = { ...contact, [key]: value };
-      if (key === 'email' && !updated.name) {
-        updated.name = value.split('@')[0] || value;
+      if (key === "email" && !updated.name) {
+        updated.name = value.split("@")[0] || value;
       }
-      if (key === 'name') {
+      if (key === "name") {
         updated.name = value;
       }
       return updated;
@@ -98,7 +142,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
   };
 
   const handleDeleteRow = (contactId: string) => {
-    const next = contacts.filter(contact => contact.id !== contactId);
+    const next = contacts.filter((contact) => contact.id !== contactId);
     setContacts(next);
     revalidate(next);
   };
@@ -108,37 +152,135 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
       ...contacts,
       {
         id: `contact-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: '',
-        email: '',
+        name: "",
+        email: "",
       },
     ];
     setContacts(next);
     revalidate(next);
   };
 
-  const applyBulkAction = (action: 'trim' | 'dedupe' | 'invalid-only') => {
+  const toggleRowSelection = (id: string, override?: boolean) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      const willSelect = override !== undefined ? override : !next.has(id);
+      if (willSelect) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleRowMouseDown = (id: string, e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    // Only allow starting drag on the left column itself (prevents text-selection glitches elsewhere)
+    const isCurrentlySelected = selectedRows.has(id);
+    const mode = !isCurrentlySelected;
+    setIsDragging(true);
+    setDragSelectMode(mode);
+    toggleRowSelection(id, mode);
+  };
+
+  const handleRowMouseEnter = (id: string) => {
+    if (isDragging) {
+      toggleRowSelection(id, dragSelectMode);
+    }
+  };
+
+  useEffect(() => {
+    let scrollInterval: number | null = null;
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      if (!tableContainerRef.current) return;
+      const rect = tableContainerRef.current.getBoundingClientRect();
+      const topBuffer = rect.top + 50;
+      const bottomBuffer = rect.bottom - 50;
+
+      if (e.clientY < topBuffer) {
+        if (!scrollInterval) {
+          scrollInterval = window.setInterval(() => {
+            if (tableContainerRef.current) tableContainerRef.current.scrollTop -= 20;
+          }, 16);
+        }
+      } else if (e.clientY > bottomBuffer) {
+        if (!scrollInterval) {
+          scrollInterval = window.setInterval(() => {
+            if (tableContainerRef.current) tableContainerRef.current.scrollTop += 20;
+          }, 16);
+        }
+      } else {
+        if (scrollInterval) {
+          window.clearInterval(scrollInterval);
+          scrollInterval = null;
+        }
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+      if (scrollInterval) {
+        window.clearInterval(scrollInterval);
+        scrollInterval = null;
+      }
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleGlobalMouseMove);
+    }
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleGlobalMouseMove);
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+      if (scrollInterval) window.clearInterval(scrollInterval);
+    };
+  }, [isDragging]);
+
+  const toggleAllRows = () => {
+    if (selectedRows.size === contacts.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(contacts.map((c) => c.id)));
+    }
+  };
+
+  const applyFieldBulkEdit = () => {
+    if (!bulkEditField || selectedRows.size === 0) return;
+    const next = contacts.map((c) => {
+      if (!selectedRows.has(c.id)) return c;
+      if (bulkEditField === "templateId") {
+        return { ...c, templateId: bulkEditValue || undefined };
+      }
+      return { ...c, [bulkEditField]: bulkEditValue };
+    });
+    setContacts(next);
+    revalidate(next);
+  };
+
+  const applyBulkAction = (action: "trim" | "dedupe" | "invalid-only") => {
     let next = [...contacts];
-    if (action === 'trim') {
-      next = next.map(contact => {
+    if (action === "trim") {
+      next = next.map((contact) => {
         const updated: Contact = { ...contact };
-        Object.keys(updated).forEach(key => {
-          updated[key] = (updated[key] || '').trim();
+        Object.keys(updated).forEach((key) => {
+          updated[key] = (updated[key] || "").trim();
         });
         return updated;
       });
     }
-    if (action === 'dedupe') {
+    if (action === "dedupe") {
       const seen = new Set<string>();
-      next = next.filter(contact => {
-        const emailKey = (contact.email || '').toLowerCase();
+      next = next.filter((contact) => {
+        const emailKey = (contact.email || "").toLowerCase();
         if (!emailKey) return true;
         if (seen.has(emailKey)) return false;
         seen.add(emailKey);
         return true;
       });
     }
-    if (action === 'invalid-only') {
-      next = next.filter(contact => validateEmail(contact.email));
+    if (action === "invalid-only") {
+      next = next.filter((contact) => validateEmail(contact.email));
     }
     setContacts(next);
     revalidate(next);
@@ -146,84 +288,106 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
   const exportCorrectedCsv = () => {
     if (contacts.length === 0) return;
-    const csvHeaders = headers.length ? headers : ['name', 'email'];
+    const csvHeaders = headers.length ? headers : ["name", "email"];
     const rows = [
-      csvHeaders.join(','),
-      ...contacts.map(contact =>
-        csvHeaders.map(header => {
-          const value = contact[header] || '';
-          return `"${String(value).replace(/"/g, '""')}"`;
-        }).join(',')
+      csvHeaders.join(","),
+      ...contacts.map((contact) =>
+        csvHeaders
+          .map((header) => {
+            const value = contact[header] || "";
+            return `"${String(value).replace(/"/g, '""')}"`;
+          })
+          .join(","),
       ),
     ];
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.download = 'contacts-corrected.csv';
+    link.download = "contacts-corrected.csv";
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const validCount = contacts.filter(contact => validateEmail(contact.email)).length;
-  const invalidCount = contacts.length - validCount;
+  const validCount = contacts.filter((contact) =>
+    validateEmail(contact.email),
+  ).length;
+  const mappedCount = contacts.filter((contact) => !!contact.templateId).length;
+  const isFullyMapped = contacts.length > 0 && mappedCount === contacts.length;
 
   useEffect(() => {
     if (contacts.length === 0) return;
     const nextHeaders = Array.from(
-      contacts.reduce((acc, contact) => {
-        Object.keys(contact).forEach(key => {
-          if (key !== 'id') acc.add(key);
-        });
-        return acc;
-      }, new Set<string>(['name', 'email']))
+      contacts.reduce(
+        (acc, contact) => {
+          Object.keys(contact).forEach((key) => {
+            if (key !== "id" && key.toLowerCase() !== "template") acc.add(key);
+          });
+          return acc;
+        },
+        new Set<string>(["name", "email"]),
+      ),
     );
     setHeaders(nextHeaders);
   }, [contacts]);
 
   const handleContinueWithCurrentData = () => {
     if (validCount > 0) {
-      onContactsImported(contacts.filter(contact => validateEmail(contact.email)));
+      onContactsImported(
+        contacts.filter((contact) => validateEmail(contact.email)),
+      );
     }
   };
 
   const downloadSampleCSV = () => {
     const sampleData = [
-      ['name', 'email', 'company', 'department'],
-      ['John Doe', 'john@example.com', 'Acme Corp', 'Sales'],
-      ['Jane Smith', 'jane@example.com', 'Tech Inc', 'Marketing'],
-      ['Bob Johnson', 'bob@example.com', 'Startup Co', 'Engineering']
+      ["name", "email", "company", "department"],
+      ["John Doe", "john@example.com", "Acme Corp", "Sales"],
+      ["Jane Smith", "jane@example.com", "Tech Inc", "Marketing"],
+      ["Bob Johnson", "bob@example.com", "Startup Co", "Engineering"],
     ];
-    
-    const csvContent = sampleData.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+
+    const csvContent = sampleData.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
+
+    const link = document.createElement("a");
     link.href = url;
-    link.download = 'sample-contacts.csv';
+    link.download = "sample-contacts.csv";
     link.click();
-    
+
     URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-100 mb-2">Import Contacts</h2>
-        <p className="text-gray-400">Upload a CSV file with your contact list. Include columns for name, email, and any merge fields.</p>
+        <h2 className="text-2xl font-bold text-white mb-2">Import Contacts</h2>
+        <p className="text-slate-400">
+          Upload a CSV file with your contact list. Include columns for name,
+          email, and any merge fields.
+        </p>
       </div>
 
-      {/* File Upload */}
-      <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 bg-gray-900/50">
+      <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 bg-slate-800/30">
         <div className="text-center">
-          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            className="mx-auto h-12 w-12 text-slate-500"
+            stroke="currentColor"
+            fill="none"
+            viewBox="0 0 48 48"
+          >
+            <path
+              d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
           <div className="mt-4">
             <label htmlFor="file-upload" className="cursor-pointer">
-              <span className="mt-2 block text-sm font-medium text-gray-200">
-                {isLoading ? 'Processing...' : 'Upload CSV file'}
+              <span className="mt-2 block text-sm font-medium text-slate-200">
+                {isLoading ? "Processing..." : "Upload CSV file"}
               </span>
               <input
                 ref={fileInputRef}
@@ -236,7 +400,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
                 disabled={isLoading}
               />
             </label>
-            <p className="mt-1 text-sm text-gray-400">
+            <p className="mt-1 text-sm text-slate-500">
               CSV files only, up to 10MB
             </p>
           </div>
@@ -247,7 +411,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
       <div className="text-center">
         <button
           onClick={downloadSampleCSV}
-          className="text-sm text-primary-400 hover:text-primary-300 font-medium"
+          className="text-sm text-yellow-500 hover:text-yellow-400 font-medium"
         >
           Download sample CSV format
         </button>
@@ -255,15 +419,23 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-900/30 border border-red-700 rounded-md p-4">
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <svg
+                className="h-5 w-5 text-rose-400"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-red-200">{error}</p>
+              <p className="text-sm text-rose-300">{error}</p>
             </div>
           </div>
         </div>
@@ -271,16 +443,26 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
-        <div className="bg-yellow-900/30 border border-yellow-700 rounded-md p-4">
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <svg
+                className="h-5 w-5 text-yellow-500"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-200">Validation Warnings</h3>
-              <div className="mt-2 text-sm text-yellow-200">
+              <h3 className="text-sm font-medium text-yellow-600">
+                Validation Warnings
+              </h3>
+              <div className="mt-2 text-sm text-yellow-600/80">
                 <ul className="list-disc list-inside space-y-1">
                   {validationErrors.slice(0, 5).map((error, index) => (
                     <li key={index}>{error}</li>
@@ -297,76 +479,225 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Contacts Preview */}
       {contacts.length > 0 && (
-        <div className="bg-green-900/30 border border-green-700 rounded-md p-4">
+        <div className={`border rounded-xl p-4 ${isFullyMapped ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+              {isFullyMapped ? (
+                <svg
+                  className="h-5 w-5 text-emerald-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="h-5 w-5 text-yellow-500"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              )}
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-green-200">
-                {validCount} valid contacts ({invalidCount} invalid)
+              <h3 className={`text-sm font-medium ${isFullyMapped ? 'text-emerald-500' : 'text-yellow-600'}`}>
+                {validCount} valid contacts | {mappedCount}/{contacts.length} Templates Mapped
               </h3>
-              <div className="mt-2 text-sm text-green-200">
-                <p>Ready to proceed with email template selection.</p>
+              <div className={`mt-2 text-sm ${isFullyMapped ? 'text-emerald-500/80' : 'text-yellow-600/80'}`}>
+                {isFullyMapped
+                  ? <p>All contacts have an assigned template. You can bypass the Template Manager directly!</p>
+                  : <p>Some contacts are missing a template assignment. They will be routed to the fallback template selector next.</p>
+                }
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Contacts Table Preview */}
       {contacts.length > 0 && (
-        <div className="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 bg-gray-800 border-b border-gray-600">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-gray-200">CSV Editor</h3>
-              <div className="flex gap-2">
-                <button onClick={() => applyBulkAction('trim')} className="btn-secondary text-xs">Trim fields</button>
-                <button onClick={() => applyBulkAction('dedupe')} className="btn-secondary text-xs">Remove duplicates</button>
-                <button onClick={() => applyBulkAction('invalid-only')} className="btn-secondary text-xs">Keep valid only</button>
-                <button onClick={exportCorrectedCsv} className="btn-secondary text-xs">Export corrected CSV</button>
-                <button onClick={handleAddRow} className="btn-secondary text-xs">Add row</button>
+        <div className="card !p-0 overflow-hidden">
+          <div className="px-5 py-4 bg-slate-800/80 border-b border-slate-700">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <h3 className="text-sm font-medium text-slate-200">CSV Editor</h3>
+                {selectedRows.size > 0 && (
+                  <div className="flex items-center gap-2 bg-yellow-500/10 px-3 py-1.5 rounded-lg border border-yellow-500/20">
+                    <span className="text-xs text-yellow-500 font-medium">{selectedRows.size} selected</span>
+                    <select value={bulkEditField} onChange={e => setBulkEditField(e.target.value)} className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500">
+                      <option value="">Edit field...</option>
+                      {headers.filter(h => h !== 'id').map(h => <option key={h} value={h}>{h}</option>)}
+                      <option value="templateId">Template</option>
+                    </select>
+                    {bulkEditField === "templateId" ? (
+                      <select value={bulkEditValue} onChange={e => setBulkEditValue(e.target.value)} className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500 max-w-[150px]">
+                        <option value="">(Unmapped) Catch-all</option>
+                        {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    ) : (
+                      <input value={bulkEditValue} onChange={e => setBulkEditValue(e.target.value)} placeholder="New value" className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500 w-32" disabled={!bulkEditField} />
+                    )}
+                    <button onClick={applyFieldBulkEdit} disabled={!bulkEditField} className="bg-yellow-500 text-yellow-950 text-xs font-semibold px-2 py-1 rounded hover:bg-yellow-400 disabled:opacity-50 transition-colors">Apply</button>
+                    <button onClick={() => setSelectedRows(new Set())} className="bg-slate-700 text-slate-300 text-xs font-semibold px-2 py-1 rounded hover:bg-slate-600 transition-colors">Deselect</button>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => applyBulkAction("trim")}
+                  className="btn-secondary text-xs !py-1.5"
+                >
+                  Trim fields
+                </button>
+                <button
+                  onClick={() => applyBulkAction("dedupe")}
+                  className="btn-secondary text-xs !py-1.5"
+                >
+                  Remove duplicates
+                </button>
+                <button
+                  onClick={() => applyBulkAction("invalid-only")}
+                  className="btn-secondary text-xs !py-1.5"
+                >
+                  Keep valid only
+                </button>
+                <button
+                  onClick={exportCorrectedCsv}
+                  className="btn-secondary text-xs !py-1.5"
+                >
+                  Export corrected CSV
+                </button>
+                <button
+                  onClick={handleAddRow}
+                  className="btn-secondary text-xs !py-1.5"
+                >
+                  Add row
+                </button>
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)]">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="sticky top-0 bg-gray-800 z-10">
+          <div ref={tableContainerRef} className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] relative">
+            <table className="min-w-max divide-y divide-slate-700">
+              <thead className="sticky top-0 bg-slate-800 z-20 shadow-sm">
                 <tr>
-                  {headers.filter(header => header !== 'id').map(header => (
-                    <th key={header} className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      {header}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                  <th className="px-3 py-3 w-10 sticky left-0 bg-slate-800 z-30 shadow-[1px_0_0_0_#334155] cursor-pointer" onClick={toggleAllRows} title="Toggle All">
+                    <div className="w-4 h-4 rounded border-2 mx-auto flex items-center justify-center transition-colors border-slate-500 hover:border-slate-400">
+                      {selectedRows.size > 0 && selectedRows.size === contacts.length && (
+                        <div className="w-2 h-2 bg-yellow-400 rounded-sm"></div>
+                      )}
+                      {selectedRows.size > 0 && selectedRows.size !== contacts.length && (
+                        <div className="w-2 h-0.5 bg-slate-400 rounded-sm"></div>
+                      )}
+                    </div>
+                  </th>
+                  {headers
+                    .filter(
+                      (header) => header !== "id" && header !== "templateId",
+                    )
+                    .map((header) => (
+                      <th
+                        key={header}
+                        className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{header}</span>
+                        </div>
+                      </th>
+                    ))}
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                    Status
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                    Template
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody className="bg-gray-900 divide-y divide-gray-700">
+              <tbody className="bg-transparent divide-y divide-slate-700/50">
                 {contacts.map((contact) => (
-                  <tr key={contact.id}>
-                    {headers.filter(header => header !== 'id').map(header => (
-                      <td key={header} className="px-4 py-2 text-sm text-gray-100">
-                        <input
-                          value={contact[header] || ''}
-                          onChange={event => handleCellChange(contact.id, header, event.target.value)}
-                          className={`w-full border rounded px-2 py-1 text-sm text-gray-100 bg-gray-800 ${
-                            header === 'email' && contact.email && !validateEmail(contact.email)
-                              ? 'border-red-500 bg-red-900/30'
-                              : 'border-gray-600'
-                          }`}
-                        />
-                      </td>
-                    ))}
-                    <td className="px-4 py-2 text-sm">
-                      {validateEmail(contact.email)
-                        ? <span className="text-green-400">Valid</span>
-                        : <span className="text-red-400">Invalid email</span>}
+                  <tr
+                    key={contact.id}
+                    className="hover:bg-slate-800/30 transition-colors group"
+                  >
+                    <td
+                      className={`px-3 py-2 w-10 sticky left-0 z-10 shadow-[2px_0_0_0_#334155] cursor-col-resize select-none transition-colors ${selectedRows.has(contact.id) ? 'bg-yellow-500/20' : 'bg-slate-900'}`}
+                      onMouseDown={(e) => handleRowMouseDown(contact.id, e)}
+                      onMouseEnter={() => handleRowMouseEnter(contact.id)}
+                    >
+                      <div className={`w-4 h-4 mx-auto rounded border-2 flex items-center justify-center transition-colors ${selectedRows.has(contact.id) ? 'border-yellow-500 bg-yellow-500/20' : 'border-slate-600 group-hover:border-slate-500'}`}>
+                        {selectedRows.has(contact.id) && <div className="w-2 h-2 bg-yellow-500 rounded-sm"></div>}
+                      </div>
                     </td>
-                    <td className="px-4 py-2 text-sm">
-                      <button onClick={() => handleDeleteRow(contact.id)} className="px-2 py-1 rounded border border-red-500 text-red-400 hover:bg-red-500/20 transition-colors">Delete</button>
+                    {headers
+                      .filter(
+                        (header) => header !== "id" && header !== "templateId",
+                      )
+                      .map((header) => (
+                        <td key={header} className="px-5 py-2 text-sm whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <input
+                              value={contact[header] || ""}
+                              onChange={(event) =>
+                                handleCellChange(
+                                  contact.id,
+                                  header,
+                                  event.target.value,
+                                )
+                              }
+                              className={`input-field !py-1.5 ${header === "email" &&
+                                contact.email &&
+                                !validateEmail(contact.email)
+                                ? "!border-rose-500/50 !bg-rose-500/10"
+                                : ""
+                                }`}
+                            />
+                          </div>
+                        </td>
+                      ))}
+                    <td className="px-5 py-3 text-sm font-medium">
+                      {validateEmail(contact.email) ? (
+                        <span className="text-emerald-500">Valid</span>
+                      ) : (
+                        <span className="text-rose-500">Invalid email</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-sm font-medium">
+                      <select
+                        value={contact.templateId || ""}
+                        onChange={(e) =>
+                          handleCellChange(
+                            contact.id,
+                            "templateId",
+                            e.target.value,
+                          )
+                        }
+                        className={`bg-slate-900 border text-xs rounded-lg block w-full p-2 ${!contact.templateId ? 'border-yellow-500/50 focus:ring-yellow-500 focus:border-yellow-500 text-yellow-200' : 'border-slate-700 focus:ring-emerald-500 text-slate-300 focus:border-emerald-500'}`}
+                      >
+                        <option value="">(Unmapped) Catch-all</option>
+                        {templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-5 py-3 text-sm">
+                      <button
+                        onClick={() => handleDeleteRow(contact.id)}
+                        className="text-rose-500 hover:text-rose-400 font-medium transition-colors"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -378,10 +709,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
       {/* Action Buttons */}
       <div className="flex justify-between">
-        <button
-          onClick={onBack}
-          className="btn-secondary"
-        >
+        <button onClick={onBack} className="btn-secondary">
           Back
         </button>
         <button

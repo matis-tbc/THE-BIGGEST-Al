@@ -7,6 +7,7 @@ export interface StoredTemplateVersion {
 export interface StoredTemplate {
   id: string;
   name: string;
+  subjects?: string[];
   content: string;
   variables: string[];
   category?: string;
@@ -19,7 +20,7 @@ export interface StoredTemplate {
 export interface StoredProjectSnapshot {
   id: string;
   name: string;
-  contacts: Array<Record<string, string>>;
+  contacts: Array<Record<string, string | null | undefined>>;
   templateId?: string;
   attachmentName?: string;
   updatedAt: string;
@@ -27,18 +28,27 @@ export interface StoredProjectSnapshot {
 
 export interface ProjectStore {
   listTemplates(): Promise<StoredTemplate[]>;
-  saveTemplate(template: Omit<StoredTemplate, 'createdAt' | 'updatedAt'> & Partial<Pick<StoredTemplate, 'createdAt' | 'updatedAt'>>): Promise<StoredTemplate>;
+  saveTemplate(
+    template: Omit<StoredTemplate, "createdAt" | "updatedAt"> &
+      Partial<Pick<StoredTemplate, "createdAt" | "updatedAt">>,
+  ): Promise<StoredTemplate>;
   deleteTemplate(templateId: string): Promise<void>;
-  createTemplateVersion(templateId: string, content: string): Promise<StoredTemplate | null>;
-  restoreTemplateVersion(templateId: string, versionId: string): Promise<StoredTemplate | null>;
+  createTemplateVersion(
+    templateId: string,
+    content: string,
+  ): Promise<StoredTemplate | null>;
+  restoreTemplateVersion(
+    templateId: string,
+    versionId: string,
+  ): Promise<StoredTemplate | null>;
 
   saveProject(snapshot: StoredProjectSnapshot): Promise<void>;
   loadProject(projectId: string): Promise<StoredProjectSnapshot | null>;
   listProjects(): Promise<StoredProjectSnapshot[]>;
 }
 
-const TEMPLATE_KEY = 'email-drafter.templates.v1';
-const PROJECT_KEY = 'email-drafter.projects.v1';
+const TEMPLATE_KEY = "email-drafter.templates.v1";
+const PROJECT_KEY = "email-drafter.projects.v1";
 
 function safeParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -49,16 +59,38 @@ function safeParse<T>(value: string | null, fallback: T): T {
   }
 }
 
+import { defaultTemplates } from "../utils/defaultTemplates";
+
 export class LocalProjectStore implements ProjectStore {
   async listTemplates(): Promise<StoredTemplate[]> {
-    const templates = safeParse<StoredTemplate[]>(window.localStorage.getItem(TEMPLATE_KEY), []);
+    let templates = safeParse<StoredTemplate[]>(
+      window.localStorage.getItem(TEMPLATE_KEY),
+      [],
+    );
+
+    // Auto-seed to replace outdated variables in localStorage automatically
+    // And completely scrub older templates that got duplicated
+    if (!window.localStorage.getItem("seeded_v8")) {
+      templates = defaultTemplates as StoredTemplate[];
+      window.localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
+      window.localStorage.setItem("seeded_v8", "true");
+    }
+
+    // Actively filter out the duplicates that have "Monetary Outreach -" prefix
+    templates = templates.filter(
+      (t) => !t.name.startsWith("Monetary Outreach -"),
+    );
+
     return templates.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async saveTemplate(template: Omit<StoredTemplate, 'createdAt' | 'updatedAt'> & Partial<Pick<StoredTemplate, 'createdAt' | 'updatedAt'>>): Promise<StoredTemplate> {
+  async saveTemplate(
+    template: Omit<StoredTemplate, "createdAt" | "updatedAt"> &
+      Partial<Pick<StoredTemplate, "createdAt" | "updatedAt">>,
+  ): Promise<StoredTemplate> {
     const templates = await this.listTemplates();
     const now = new Date().toISOString();
-    const existing = templates.find(t => t.id === template.id);
+    const existing = templates.find((t) => t.id === template.id);
 
     const persisted: StoredTemplate = {
       ...template,
@@ -67,7 +99,7 @@ export class LocalProjectStore implements ProjectStore {
       versions: template.versions || existing?.versions || [],
     };
 
-    const next = templates.filter(t => t.id !== persisted.id);
+    const next = templates.filter((t) => t.id !== persisted.id);
     next.push(persisted);
     window.localStorage.setItem(TEMPLATE_KEY, JSON.stringify(next));
     return persisted;
@@ -75,13 +107,16 @@ export class LocalProjectStore implements ProjectStore {
 
   async deleteTemplate(templateId: string): Promise<void> {
     const templates = await this.listTemplates();
-    const next = templates.filter(template => template.id !== templateId);
+    const next = templates.filter((template) => template.id !== templateId);
     window.localStorage.setItem(TEMPLATE_KEY, JSON.stringify(next));
   }
 
-  async createTemplateVersion(templateId: string, content: string): Promise<StoredTemplate | null> {
+  async createTemplateVersion(
+    templateId: string,
+    content: string,
+  ): Promise<StoredTemplate | null> {
     const templates = await this.listTemplates();
-    const match = templates.find(template => template.id === templateId);
+    const match = templates.find((template) => template.id === templateId);
     if (!match) return null;
 
     const version: StoredTemplateVersion = {
@@ -96,17 +131,20 @@ export class LocalProjectStore implements ProjectStore {
       updatedAt: new Date().toISOString(),
     };
 
-    const next = templates.filter(template => template.id !== templateId);
+    const next = templates.filter((template) => template.id !== templateId);
     next.push(nextTemplate);
     window.localStorage.setItem(TEMPLATE_KEY, JSON.stringify(next));
     return nextTemplate;
   }
 
-  async restoreTemplateVersion(templateId: string, versionId: string): Promise<StoredTemplate | null> {
+  async restoreTemplateVersion(
+    templateId: string,
+    versionId: string,
+  ): Promise<StoredTemplate | null> {
     const templates = await this.listTemplates();
-    const match = templates.find(template => template.id === templateId);
+    const match = templates.find((template) => template.id === templateId);
     if (!match) return null;
-    const version = match.versions.find(item => item.id === versionId);
+    const version = match.versions.find((item) => item.id === versionId);
     if (!version) return null;
 
     const nextTemplate: StoredTemplate = {
@@ -115,7 +153,7 @@ export class LocalProjectStore implements ProjectStore {
       updatedAt: new Date().toISOString(),
     };
 
-    const next = templates.filter(template => template.id !== templateId);
+    const next = templates.filter((template) => template.id !== templateId);
     next.push(nextTemplate);
     window.localStorage.setItem(TEMPLATE_KEY, JSON.stringify(next));
     return nextTemplate;
@@ -123,7 +161,7 @@ export class LocalProjectStore implements ProjectStore {
 
   async saveProject(snapshot: StoredProjectSnapshot): Promise<void> {
     const projects = await this.listProjects();
-    const next = projects.filter(project => project.id !== snapshot.id);
+    const next = projects.filter((project) => project.id !== snapshot.id);
     next.push({
       ...snapshot,
       updatedAt: new Date().toISOString(),
@@ -133,11 +171,14 @@ export class LocalProjectStore implements ProjectStore {
 
   async loadProject(projectId: string): Promise<StoredProjectSnapshot | null> {
     const projects = await this.listProjects();
-    return projects.find(project => project.id === projectId) || null;
+    return projects.find((project) => project.id === projectId) || null;
   }
 
   async listProjects(): Promise<StoredProjectSnapshot[]> {
-    const projects = safeParse<StoredProjectSnapshot[]>(window.localStorage.getItem(PROJECT_KEY), []);
+    const projects = safeParse<StoredProjectSnapshot[]>(
+      window.localStorage.getItem(PROJECT_KEY),
+      [],
+    );
     return projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 }

@@ -1,8 +1,8 @@
 import { GraphClientService } from './graphClient';
 import { AttachmentHandler } from './attachmentHandler';
 import { TokenManager } from './tokenManager';
-import { mergeTemplate, parseTemplateSections } from '../utils/templateMerge';
-import { errorHandler, ErrorContext } from './errorHandler';
+import { mergeTemplate, parseTemplateSections, DEFAULT_SUBJECTS, formatEmailBodyHtml } from '../utils/templateMerge';
+import { errorHandler } from './errorHandler';
 
 interface Contact {
   id: string;
@@ -14,13 +14,14 @@ interface Contact {
 interface Template {
   id: string;
   name: string;
+  subjects?: string[];
   content: string;
   variables: string[];
 }
 
 interface ProcessingResult {
   contactId: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'retrying';
+  status: 'pending' | 'processing' | 'drafted' | 'attaching' | 'completed' | 'failed' | 'retrying';
   messageId?: string;
   error?: string;
   retryCount?: number;
@@ -37,8 +38,8 @@ export class EnhancedBatchProcessor {
   private graphService: GraphClientService;
   private attachmentHandler: AttachmentHandler;
   private tokenManager: TokenManager;
-  private readonly BATCH_SIZE = 20; // Graph API batch limit
-  private readonly MAX_CONCURRENT_BATCHES = 3;
+  private readonly BATCH_SIZE = 4; // Lowered from 20 to bypass MailboxConcurrency limits
+  private readonly MAX_CONCURRENT_BATCHES = 1; // Lowered to respect MS Graph Throttling
   private readonly DEFAULT_OPTIONS: BatchProcessingOptions = {
     maxRetries: 3,
     retryDelayMs: 1000,
@@ -65,7 +66,7 @@ export class EnhancedBatchProcessor {
   ): Promise<string> {
     const operationId = `op-${Date.now()}`;
     const processingOptions = { ...this.DEFAULT_OPTIONS, ...options };
-    
+
     const results: ProcessingResult[] = contacts.map(contact => ({
       contactId: contact.id,
       status: 'pending',
@@ -98,7 +99,7 @@ export class EnhancedBatchProcessor {
       return operationId;
     } catch (error) {
       console.error('Batch processing failed:', error);
-      
+
       // Mark all as failed with appropriate error message
       results.forEach(result => {
         if (result.status === 'pending' || result.status === 'processing') {
@@ -106,7 +107,7 @@ export class EnhancedBatchProcessor {
           result.error = error instanceof Error ? error.message : 'Batch processing failed';
         }
       });
-      
+
       onProgress([...results]);
       throw error;
     }
@@ -123,7 +124,7 @@ export class EnhancedBatchProcessor {
   private async processBatchesWithRetry(
     batches: Contact[][],
     template: Template,
-    attachment: File,
+    _attachment: File,
     results: ProcessingResult[],
     onProgress: (results: ProcessingResult[]) => void,
     options: BatchProcessingOptions
@@ -132,18 +133,23 @@ export class EnhancedBatchProcessor {
     const concurrency = Math.min(this.MAX_CONCURRENT_BATCHES, batches.length);
 
     const parsedTemplate = parseTemplateSections(template.content);
-    const subjectTemplate = parsedTemplate.subject || '';
+    // A/B testing subjects
+    const availableSubjects = template.subjects && template.subjects.length > 0
+      ? template.subjects
+      : (parsedTemplate.subject ? [parsedTemplate.subject] : DEFAULT_SUBJECTS);
+
     const toTemplate = parsedTemplate.to || '';
     const bodyTemplate = parsedTemplate.body || template.content;
 
     for (let i = 0; i < batches.length; i += concurrency) {
       const batchGroup = batches.slice(i, i + concurrency);
-      
+
       const batchPromises = batchGroup.map(async (batch, batchIndex) => {
         const globalBatchIndex = i + batchIndex;
         return await this.processBatchWithRetry(
           batch,
-          subjectTemplate,
+          _attachment, // Pass attachment to know if we should halt at 'drafted' instead of 'completed'
+          availableSubjects,
           toTemplate,
           bodyTemplate,
           globalBatchIndex,
@@ -154,7 +160,7 @@ export class EnhancedBatchProcessor {
       });
 
       const batchResults = await Promise.allSettled(batchPromises);
-      
+
       // Collect successful message IDs
       batchResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {
@@ -163,6 +169,11 @@ export class EnhancedBatchProcessor {
           console.error(`Batch ${i + index} failed:`, result.reason);
         }
       });
+
+      // Add a buffer delay between batches to respect API limits (1500ms)
+      if (i + concurrency < batches.length) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
     }
 
     return createdMessageIds;
@@ -170,7 +181,8 @@ export class EnhancedBatchProcessor {
 
   private async processBatchWithRetry(
     batch: Contact[],
-    subjectTemplate: string,
+    attachment: File | null,
+    availableSubjects: string[],
     toTemplate: string,
     bodyTemplate: string,
     batchIndex: number,
@@ -180,7 +192,7 @@ export class EnhancedBatchProcessor {
     retryCount: number = 0
   ): Promise<string[]> {
     const contactIds = batch.map(contact => contact.id);
-    
+
     try {
       // Mark contacts as processing
       batch.forEach(contact => {
@@ -192,9 +204,11 @@ export class EnhancedBatchProcessor {
       onProgress([...results]);
 
       // Prepare draft data
-      const drafts = batch.map(contact => {
-        const subject = mergeTemplate(subjectTemplate, contact).trim();
-        const body = mergeTemplate(bodyTemplate, contact);
+      const drafts = batch.map((contact, index) => {
+        const selectedSubjectTemplate = availableSubjects[index % availableSubjects.length];
+        const subject = mergeTemplate(selectedSubjectTemplate, contact).trim();
+        const rawBody = mergeTemplate(bodyTemplate, contact);
+        const body = formatEmailBodyHtml(rawBody);
         const mergedRecipients = mergeTemplate(toTemplate, contact).trim();
 
         const toEmails = this.parseRecipients(mergedRecipients);
@@ -217,10 +231,10 @@ export class EnhancedBatchProcessor {
       batch.forEach((contact, index) => {
         const result = results.find(r => r.contactId === contact.id);
         const batchResult = batchResults[index];
-        
+
         if (result && batchResult) {
           if (batchResult.success) {
-            result.status = 'completed';
+            result.status = attachment ? 'drafted' : 'completed';
             result.messageId = batchResult.id;
             createdMessageIds.push(batchResult.id);
           } else {
@@ -236,7 +250,7 @@ export class EnhancedBatchProcessor {
       // Handle failed contacts with retry logic if enabled
       if (failedContacts.length > 0 && options.continueOnSingleFailure && retryCount < (options.maxRetries || 3)) {
         console.log(`Retrying ${failedContacts.length} failed contacts in batch ${batchIndex}, attempt ${retryCount + 1}`);
-        
+
         // Mark failed contacts as retrying
         failedContacts.forEach(contact => {
           const result = results.find(r => r.contactId === contact.id);
@@ -253,7 +267,8 @@ export class EnhancedBatchProcessor {
         // Retry only the failed contacts
         const retryResults = await this.processBatchWithRetry(
           failedContacts,
-          subjectTemplate,
+          attachment,
+          availableSubjects,
           toTemplate,
           bodyTemplate,
           batchIndex,
@@ -280,7 +295,7 @@ export class EnhancedBatchProcessor {
       // Mark all contacts in this batch based on error type
       batch.forEach(contact => {
         const result = results.find(r => r.contactId === contact.id);
-        if (result && result.status !== 'completed') {
+        if (result && result.status !== 'completed' && result.status !== 'drafted') {
           if (recoveryPlan.shouldRetry && retryCount < (options.maxRetries || 3)) {
             result.status = 'retrying';
             result.retryCount = (result.retryCount || 0) + 1;
@@ -297,13 +312,14 @@ export class EnhancedBatchProcessor {
       // Retry the entire batch if error is retryable
       if (recoveryPlan.shouldRetry && retryCount < (options.maxRetries || 3)) {
         console.log(`Retrying batch ${batchIndex} after error, attempt ${retryCount + 1}`);
-        
+
         // Wait before retry based on error category
         await this.delay(recoveryPlan.delayMs);
 
         return await this.processBatchWithRetry(
           batch,
-          subjectTemplate,
+          attachment,
+          availableSubjects,
           toTemplate,
           bodyTemplate,
           batchIndex,
@@ -327,7 +343,8 @@ export class EnhancedBatchProcessor {
   ): Promise<void> {
     if (messageIds.length === 0) return;
 
-    const concurrency = 3;
+    // Strictly sequential (concurrency = 1) to bypass Microsoft Graph MailboxConcurrency throttling
+    const concurrency = 1;
     const chunks = this.chunkArray(messageIds, concurrency);
 
     for (const chunk of chunks) {
@@ -337,18 +354,24 @@ export class EnhancedBatchProcessor {
 
         while (retryCount <= maxRetries) {
           try {
-            await this.attachmentHandler.attachFileToDraft(messageId, attachment);
-            
-            // Update the corresponding result if found
+            // Signal attaching phase to UI
             const result = results.find(r => r.messageId === messageId);
-            if (result && result.status === 'completed') {
-              // Attachment successful, no change needed
+            if (result && result.status === 'drafted') {
+              result.status = 'attaching';
+              onProgress([...results]);
             }
-            
+
+            await this.attachmentHandler.attachFileToDraft(messageId, attachment);
+
+            // Update the corresponding result if found
+            if (result && result.status === 'attaching') {
+              result.status = 'completed';
+            }
+
             break; // Success, exit retry loop
           } catch (error) {
             retryCount++;
-            
+
             const recoveryPlan = errorHandler.handleAttachmentError(
               error as Error,
               messageId,
@@ -374,6 +397,9 @@ export class EnhancedBatchProcessor {
 
       await Promise.allSettled(promises);
       onProgress([...results]);
+
+      // Delay explicitly between attachments to unlock Exchange item state
+      await this.delay(1000);
     }
   }
 
@@ -406,7 +432,7 @@ export class EnhancedBatchProcessor {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async getOperationStatus(operationId: string): Promise<ProcessingResult[]> {
+  async getOperationStatus(_operationId: string): Promise<ProcessingResult[]> {
     // In a real implementation, this would query the database
     // For now, return empty array
     return [];
@@ -414,22 +440,22 @@ export class EnhancedBatchProcessor {
 
   async retryFailedContacts(
     failedResults: ProcessingResult[],
-    template: Template,
-    attachment: File,
+    _template: Template,
+    _attachment: File,
     onProgress: (results: ProcessingResult[]) => void,
-    options: BatchProcessingOptions = {}
+    _options: BatchProcessingOptions = {}
   ): Promise<void> {
     // This would reconstruct contacts from failed results and retry them
     // Implementation would be similar to the main processing but only for failed contacts
     console.log('Retrying failed contacts:', failedResults.length);
-    
+
     // For now, just mark them as pending for retry
     failedResults.forEach(result => {
       result.status = 'pending';
       result.error = undefined;
       result.retryCount = (result.retryCount || 0) + 1;
     });
-    
+
     onProgress([...failedResults]);
   }
 }

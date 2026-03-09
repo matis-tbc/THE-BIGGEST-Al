@@ -1,50 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { AuthScreen } from './components/AuthScreen';
-import { ContactImport } from './components/ContactImport';
-import { TemplateManager } from './components/TemplateManager';
-import { EnhancedTemplateEditor } from './components/EnhancedTemplateEditor';
-import { AttachmentPicker } from './components/AttachmentPicker';
-import { PreflightReview } from './components/PreflightReview';
-import { BatchProgress } from './components/BatchProgress';
-import { ErrorReview } from './components/ErrorReview';
-import { RendererErrorOverlay } from './components/RendererErrorOverlay';
-import { CampaignHome } from './components/CampaignHome';
-import { projectStore } from './services/projectStore';
-import { campaignStore, MessageStatus } from './services/campaignStore';
-import { syncSchedulerResults } from './services/campaignSync';
-import { motion } from 'framer-motion';
-import { Sparkles, Gauge } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { AuthScreen } from "./components/AuthScreen";
+import { ContactImport } from "./components/ContactImport";
+import { TemplateManager } from "./components/TemplateManager";
+import { AttachmentPicker } from "./components/AttachmentPicker";
+import { PreflightReview } from "./components/PreflightReview";
+import { BatchProgress } from "./components/BatchProgress";
+import { ErrorReview } from "./components/ErrorReview";
+import { RendererErrorOverlay } from "./components/RendererErrorOverlay";
+import { seedTemplates } from "./utils/seedTemplates";
+import { CampaignHome } from "./components/CampaignHome";
+import { MemberManager } from "./components/MemberManager";
+import { projectStore } from "./services/projectStore";
+import { campaignStore, MessageStatus } from "./services/campaignStore";
+import { syncSchedulerResults } from "./services/campaignSync";
+import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 
 interface Contact {
   id: string;
   name: string;
   email: string;
-  [key: string]: string;
+  templateId?: string | null;
+  [key: string]: string | null | undefined;
 }
 
 interface Template {
   id: string;
   name: string;
+  subjects?: string[];
   content: string;
   variables: string[];
 }
 
 interface AppState {
   isAuthenticated: boolean;
-  currentStep: 'auth' | 'home' | 'contacts' | 'template' | 'attachment' | 'preflight' | 'processing' | 'review';
+  currentStep:
+  | "auth"
+  | "home"
+  | "contacts"
+  | "team"
+  | "template"
+  | "attachment"
+  | "preflight"
+  | "processing"
+  | "review";
   contacts: Contact[];
   template: Template | null;
   attachment: File | null;
   operationId: string | null;
   campaignId: string | null;
   results: ProcessingResult[];
+  templates: Template[];
 }
 
 interface ProcessingResult {
   contactId: string;
   name: string;
   email: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: "pending" | "processing" | "drafted" | "attaching" | "completed" | "failed";
   messageId?: string;
   error?: string;
 }
@@ -57,53 +70,70 @@ interface AuthenticatedUser {
 function App() {
   const [appState, setAppState] = useState<AppState>({
     isAuthenticated: false,
-    currentStep: 'auth',
+    currentStep: "auth",
     contacts: [],
     template: null,
     attachment: null,
     operationId: null,
     campaignId: null,
     results: [],
+    templates: [],
   });
 
   const [isLoading, setIsLoading] = useState(true);
   const [rendererError, setRendererError] = useState<string | null>(null);
-  const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(null);
+  const [authenticatedUser, setAuthenticatedUser] =
+    useState<AuthenticatedUser | null>(null);
   const [tokenExpiry, setTokenExpiry] = useState<number | null>(null);
-  const [restoredProjectNotice, setRestoredProjectNotice] = useState<string | null>(null);
+  const [restoredProjectNotice, setRestoredProjectNotice] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
-    console.info('[App] Renderer booted. electronAPI available:', Boolean(window.electronAPI));
+    console.info(
+      "[App] Renderer booted. electronAPI available:",
+      Boolean(window.electronAPI),
+    );
+    // Seed the monetary templates if they are missing
+    seedTemplates().catch(console.error);
   }, []);
 
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
-      const message = event.error?.message || event.message || 'Renderer error';
-      console.error('[RendererError]', message, event.error);
+      const message = event.error?.message || event.message || "Renderer error";
+      console.error("[RendererError]", message, event.error);
       setRendererError(message);
     };
 
     const handleRejection = (event: PromiseRejectionEvent) => {
-      const reason = (event.reason && event.reason.message) || String(event.reason);
-      console.error('[RendererUnhandledRejection]', reason, event.reason);
+      const reason =
+        (event.reason && event.reason.message) || String(event.reason);
+      console.error("[RendererUnhandledRejection]", reason, event.reason);
       setRendererError(reason);
     };
 
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleRejection);
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
     return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleRejection);
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
     };
   }, []);
 
   useEffect(() => {
-    console.info('[App] Current step changed:', appState.currentStep);
-    if (appState.currentStep === 'processing' && (!appState.template || !appState.attachment)) {
-      console.warn('[App] Processing step reached without required template/attachment; redirecting back.');
-      setAppState(prev => ({ ...prev, currentStep: 'attachment' }));
+    console.info("[App] Current step changed:", appState.currentStep);
+    const allHaveTemplates = appState.contacts.length > 0 && appState.contacts.every(c => !!c.templateId);
+
+    if (
+      appState.currentStep === "processing" &&
+      (!appState.attachment || (!appState.template && !allHaveTemplates))
+    ) {
+      console.warn(
+        "[App] Processing step reached without required template/attachment; redirecting back.",
+      );
+      setAppState((prev) => ({ ...prev, currentStep: "attachment" }));
     }
-  }, [appState.currentStep, appState.template, appState.attachment]);
+  }, [appState.currentStep, appState.template, appState.attachment, appState.contacts]);
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -119,7 +149,11 @@ function App() {
       const tokens = await window.electronAPI.getTokens();
       if (tokens) {
         setTokenExpiry(tokens.expiresAt || null);
-        setAppState(prev => ({ ...prev, isAuthenticated: true, currentStep: 'home' }));
+        setAppState((prev) => ({
+          ...prev,
+          isAuthenticated: true,
+          currentStep: "home",
+        }));
         if (window.electronAPI.getUserProfile) {
           const profile = await window.electronAPI.getUserProfile();
           if (profile) {
@@ -128,55 +162,81 @@ function App() {
         }
         const recentProject = (await projectStore.listProjects())[0];
         if (recentProject && recentProject.contacts.length > 0) {
-          setAppState(prev => ({
+          setAppState((prev) => ({
             ...prev,
             contacts: recentProject.contacts as Contact[],
           }));
-          setRestoredProjectNotice(`Restored recent project "${recentProject.name}".`);
+          setRestoredProjectNotice(
+            `Restored recent project "${recentProject.name}".`,
+          );
         }
+        const savedTemplates = await projectStore.listTemplates();
+        setAppState((prev) => ({
+          ...prev,
+          templates: savedTemplates as unknown as Template[],
+        }));
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      console.error("Auth check failed:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAuthSuccess = () => {
-    console.info('[App] Authentication successful, moving to campaign home');
-    setAppState(prev => ({ ...prev, isAuthenticated: true, currentStep: 'home' }));
+    console.info("[App] Authentication successful, moving to campaign home");
+    setAppState((prev) => ({
+      ...prev,
+      isAuthenticated: true,
+      currentStep: "home",
+    }));
     setRendererError(null);
     if (window.electronAPI?.getUserProfile) {
-      window.electronAPI.getUserProfile()
-        .then(profile => {
+      window.electronAPI
+        .getUserProfile()
+        .then((profile) => {
           if (profile) {
             setAuthenticatedUser(profile);
           }
         })
-        .catch(error => {
-          console.error('Failed to load user profile after auth:', error);
+        .catch((error) => {
+          console.error("Failed to load user profile after auth:", error);
         });
     }
     if (window.electronAPI?.getTokens) {
-      window.electronAPI.getTokens()
-        .then(tokens => {
+      window.electronAPI
+        .getTokens()
+        .then((tokens) => {
           if (tokens?.expiresAt) {
             setTokenExpiry(tokens.expiresAt);
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   };
 
-  const handleContactsImported = (contacts: Contact[]) => {
-    console.info('[App] Imported contacts:', contacts.length);
-    setAppState(prev => ({ ...prev, contacts, currentStep: 'template' }));
+  const handleContactsImported = async (contacts: Contact[]) => {
+    console.info("[App] Imported contacts:", contacts.length);
+    const allHaveTemplates = contacts.length > 0 && contacts.every((c) => !!c.templateId);
+
+    if (allHaveTemplates) {
+      console.info("[App] All valid contacts have templates assigned. Bypassing Template step.");
+      const savedTemplates = await projectStore.listTemplates();
+      setAppState((prev) => ({
+        ...prev,
+        contacts,
+        templates: savedTemplates as unknown as Template[],
+        currentStep: "attachment",
+      }));
+    } else {
+      setAppState((prev) => ({ ...prev, contacts, currentStep: "template" }));
+    }
   };
 
   const startNewCampaign = () => {
-    setAppState(prev => ({
+    setAppState((prev) => ({
       ...prev,
-      currentStep: 'contacts',
+      currentStep: "contacts",
       contacts: [],
       template: null,
       attachment: null,
@@ -186,39 +246,58 @@ function App() {
     }));
   };
 
-  const handleTemplateSelected = (template: Template) => {
-    console.info('[App] Template selected:', template.id);
-    setAppState(prev => ({ ...prev, template, currentStep: 'attachment' }));
+  const handleTemplateSelected = async (template: Template) => {
+    console.info("[App] Template selected:", template.id);
+    const savedTemplates = await projectStore.listTemplates();
+    setAppState((prev) => ({
+      ...prev,
+      template,
+      templates: savedTemplates as unknown as Template[],
+      currentStep: "attachment",
+    }));
   };
 
   const handleAttachmentSelected = (file: File) => {
-    console.info('[App] Attachment selected:', file.name, file.size, 'bytes');
-    setAppState(prev => ({ ...prev, attachment: file, currentStep: 'preflight' }));
+    console.info("[App] Attachment selected:", file.name, file.size, "bytes");
+    setAppState((prev) => ({
+      ...prev,
+      attachment: file,
+      currentStep: "preflight",
+    }));
   };
 
   const handleProcessingComplete = (
     operationId: string,
-    results: Array<{ contactId: string; status: 'pending' | 'processing' | 'completed' | 'failed'; messageId?: string; error?: string; }>
+    results: Array<{
+      contactId: string;
+      status: "pending" | "processing" | "drafted" | "attaching" | "completed" | "failed";
+      messageId?: string;
+      error?: string;
+    }>,
   ) => {
-    console.info('[App] Processing completed. Operation ID:', operationId);
-    const contactMap = new Map(appState.contacts.map(contact => [contact.id, contact]));
-    const enrichedResults: ProcessingResult[] = results.map(result => {
+    console.info("[App] Processing completed. Operation ID:", operationId);
+    const contactMap = new Map(
+      appState.contacts.map((contact) => [contact.id, contact]),
+    );
+    const enrichedResults: ProcessingResult[] = results.map((result) => {
       const contact = contactMap.get(result.contactId);
       return {
         contactId: result.contactId,
-        name: contact?.name || 'Unknown',
-        email: contact?.email || '',
+        name: contact?.name || "Unknown",
+        email: contact?.email || "",
         status: result.status,
         messageId: result.messageId,
-        error: result.error
+        error: result.error,
       };
     });
 
     const campaignId = `camp-${Date.now()}`;
-    const toMessageStatus = (status: ProcessingResult['status']): MessageStatus => {
-      if (status === 'completed') return 'drafted';
-      if (status === 'failed') return 'failed';
-      return 'drafted';
+    const toMessageStatus = (
+      status: ProcessingResult["status"],
+    ): MessageStatus => {
+      if (status === "completed") return "drafted";
+      if (status === "failed") return "failed";
+      return "drafted";
     };
 
     void (async () => {
@@ -232,7 +311,7 @@ function App() {
           attachmentName: appState.attachment?.name,
         });
         await campaignStore.upsertMessages(
-          enrichedResults.map(item => ({
+          enrichedResults.map((item) => ({
             id: `msg-${campaignId}-${item.contactId}`,
             campaignId,
             contactId: item.contactId,
@@ -240,33 +319,44 @@ function App() {
             contactEmail: item.email,
             messageId: item.messageId,
             status: toMessageStatus(item.status),
-            draftCreatedAt: item.status === 'completed' ? new Date().toISOString() : undefined,
+            draftCreatedAt:
+              item.status === "completed"
+                ? new Date().toISOString()
+                : undefined,
             error: item.error,
             updatedAt: new Date().toISOString(),
-          }))
+          })),
         );
         await campaignStore.createEvents(
-          enrichedResults.map(item => ({
+          enrichedResults.map((item) => ({
             campaignId,
             messageId: item.messageId,
             contactId: item.contactId,
-            type: item.status === 'completed' ? 'draft_created' : 'send_failed',
-            detail: item.status === 'completed' ? 'Draft created in Outlook.' : (item.error || 'Draft creation failed'),
-          }))
+            type: item.status === "completed" ? "draft_created" : "send_failed",
+            detail:
+              item.status === "completed"
+                ? "Draft created in Outlook."
+                : item.error || "Draft creation failed",
+          })),
         );
-        const hasFailures = enrichedResults.some(item => item.status === 'failed');
-        await campaignStore.updateCampaignStatus(campaignId, hasFailures ? 'failed' : 'drafted');
+        const hasFailures = enrichedResults.some(
+          (item) => item.status === "failed",
+        );
+        await campaignStore.updateCampaignStatus(
+          campaignId,
+          hasFailures ? "failed" : "drafted",
+        );
       } catch (error) {
-        console.error('Failed to persist campaign records:', error);
+        console.error("Failed to persist campaign records:", error);
       }
     })();
 
-    setAppState(prev => ({
+    setAppState((prev) => ({
       ...prev,
       operationId,
       campaignId,
       results: enrichedResults,
-      currentStep: 'review'
+      currentStep: "review",
     }));
   };
 
@@ -274,22 +364,23 @@ function App() {
     setAuthenticatedUser(null);
     setAppState({
       isAuthenticated: false,
-      currentStep: 'auth',
+      currentStep: "auth",
       contacts: [],
       template: null,
       attachment: null,
       operationId: null,
       campaignId: null,
       results: [],
+      templates: [],
     });
     setTokenExpiry(null);
     setRestoredProjectNotice(null);
   };
 
   const backToCampaignHome = () => {
-    setAppState(prev => ({
+    setAppState((prev) => ({
       ...prev,
-      currentStep: 'home',
+      currentStep: "home",
       contacts: [],
       template: null,
       attachment: null,
@@ -302,26 +393,31 @@ function App() {
   useEffect(() => {
     if (!appState.isAuthenticated) return;
     const snapshot = {
-      id: 'active-project',
-      name: 'Current Drafting Session',
+      id: "active-project",
+      name: "Current Drafting Session",
       contacts: appState.contacts,
       templateId: appState.template?.id,
       attachmentName: appState.attachment?.name,
       updatedAt: new Date().toISOString(),
     };
-    projectStore.saveProject(snapshot).catch(error => {
-      console.error('Failed to autosave project snapshot:', error);
+    projectStore.saveProject(snapshot).catch((error) => {
+      console.error("Failed to autosave project snapshot:", error);
     });
-  }, [appState.isAuthenticated, appState.contacts, appState.template, appState.attachment]);
+  }, [
+    appState.isAuthenticated,
+    appState.contacts,
+    appState.template,
+    appState.attachment,
+  ]);
 
   useEffect(() => {
     if (!appState.isAuthenticated) return;
-    syncSchedulerResults().catch(error => {
-      console.error('Initial scheduler sync failed:', error);
+    syncSchedulerResults().catch((error) => {
+      console.error("Initial scheduler sync failed:", error);
     });
     const timer = window.setInterval(() => {
-      syncSchedulerResults().catch(error => {
-        console.error('Periodic scheduler sync failed:', error);
+      syncSchedulerResults().catch((error) => {
+        console.error("Periodic scheduler sync failed:", error);
       });
     }, 5000);
     return () => window.clearInterval(timer);
@@ -358,34 +454,47 @@ function App() {
   }
 
   return (
-    <div className="h-full tunnel-shell relative">
+    <div className="h-full bg-slate-900 relative text-slate-100">
       {rendererErrorOverlay}
-      <div className="tunnel-content max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
           className="mb-8"
         >
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="hyperloop-chip flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> CU Hyperloop</span>
-            <span className="hyperloop-chip flex items-center gap-1"><Gauge className="h-3.5 w-3.5" /> Draft Control</span>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="bg-yellow-500/10 text-yellow-500 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-yellow-500/20">
+              <Sparkles className="h-3.5 w-3.5" /> Email Drafter Pro
+            </span>
           </div>
-          <h1 className="text-4xl font-bold text-slate-100 tracking-tight mb-2">Tunnel Boring Draft Studio</h1>
-          <p className="text-slate-300">Create high-throughput Outlook drafts with in-app contact cleanup, template versioning, and preflight validation.</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
+            Campaign Studio
+          </h1>
+          <p className="text-slate-400">
+            Create high-throughput Outlook drafts with in-app contact cleanup,
+            template versioning, and preflight validation.
+          </p>
           {authenticatedUser?.email && (
-            <p className="text-sm text-slate-300 mt-2">
-              Signed in as {authenticatedUser.displayName || authenticatedUser.email} ({authenticatedUser.email})
+            <p className="text-sm text-slate-400 mt-2">
+              Signed in as{" "}
+              <span className="font-medium text-slate-200">
+                {authenticatedUser.displayName || authenticatedUser.email}
+              </span>{" "}
+              ({authenticatedUser.email})
             </p>
           )}
           {tokenExpiry && (
-            <p className="text-xs text-slate-400 mt-1">
-              Session token expires at {new Date(tokenExpiry).toLocaleTimeString()}
+            <p className="text-xs text-slate-500 mt-1">
+              Session token expires at{" "}
+              {new Date(tokenExpiry).toLocaleTimeString()}
             </p>
           )}
           {restoredProjectNotice && (
-            <p className="text-xs text-cyan-300 mt-1">{restoredProjectNotice}</p>
+            <p className="text-sm font-medium text-yellow-400 mt-2 bg-yellow-500/10 border border-yellow-500/20 px-3 py-1.5 rounded-md inline-block">
+              {restoredProjectNotice}
+            </p>
           )}
           <div className="mt-3">
             <button
@@ -404,157 +513,145 @@ function App() {
         </motion.div>
 
         {/* Progress Steps */}
-        {appState.currentStep !== 'home' && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between gap-2">
-            {[
-              { key: 'contacts', label: 'Import Contacts', icon: '👥' },
-              { key: 'template', label: 'Select Template', icon: '📝' },
-              { key: 'attachment', label: 'Choose Attachment', icon: '📎' },
-              { key: 'preflight', label: 'Preflight Review', icon: '🧪' },
-              { key: 'processing', label: 'Create Drafts', icon: '⚡' },
-              { key: 'review', label: 'Review Results', icon: '✅' },
-            ].map((step, index) => (
-              <div key={step.key} className="flex items-center">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  appState.currentStep === step.key 
-                    ? 'border-cyan-300 bg-cyan-500/20 text-cyan-200 shadow-neon' 
-                    : appState.currentStep === 'review' || 
-                      (step.key === 'contacts' && appState.contacts.length > 0) ||
-                      (step.key === 'template' && appState.template) ||
-                      (step.key === 'attachment' && appState.attachment) ||
-                      (step.key === 'processing' && appState.operationId)
-                    ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
-                    : 'border-slate-600 bg-slate-900/60 text-slate-400'
-                }`}>
-                  <span className="text-sm font-medium">{index + 1}</span>
+        {appState.currentStep !== "home" && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between gap-2">
+              {[
+                { key: "contacts", label: "Import Contacts", icon: "👥" },
+                { key: "template", label: "Select Template", icon: "📝" },
+                { key: "attachment", label: "Choose Attachment", icon: "📎" },
+                { key: "preflight", label: "Preflight Review", icon: "🧪" },
+                { key: "processing", label: "Create Drafts", icon: "⚡" },
+                { key: "review", label: "Review Results", icon: "✅" },
+              ].map((step, index) => (
+                <div key={step.key} className="flex items-center">
+                  <div
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${appState.currentStep === step.key
+                      ? "border-yellow-500 bg-yellow-500/10 text-yellow-500"
+                      : appState.currentStep === "review" ||
+                        (step.key === "contacts" &&
+                          appState.contacts.length > 0) ||
+                        (step.key === "template" && (appState.template || (appState.contacts.length > 0 && appState.contacts.every(c => !!c.templateId)))) ||
+                        (step.key === "attachment" &&
+                          appState.attachment) ||
+                        (step.key === "processing" && appState.operationId)
+                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                        : "border-slate-700 bg-slate-800 text-slate-500"
+                      }`}
+                  >
+                    <span className="text-sm font-medium">{index + 1}</span>
+                  </div>
+                  <div className="ml-3">
+                    <p
+                      className={`text-sm font-medium ${appState.currentStep === step.key
+                        ? "text-yellow-500"
+                        : "text-slate-500"
+                        }`}
+                    >
+                      {step.label}
+                    </p>
+                  </div>
+                  {index < 5 && (
+                    <div
+                      className={`flex-1 h-0.5 mx-4 ${appState.currentStep === "review" ||
+                        (step.key === "contacts" &&
+                          appState.contacts.length > 0) ||
+                        (step.key === "template" && (appState.template || (appState.contacts.length > 0 && appState.contacts.every(c => !!c.templateId)))) ||
+                        (step.key === "attachment" && appState.attachment) ||
+                        (step.key === "preflight" && appState.attachment) ||
+                        (step.key === "processing" && appState.operationId)
+                        ? "bg-emerald-500"
+                        : "bg-slate-700"
+                        }`}
+                    />
+                  )}
                 </div>
-                <div className="ml-3">
-                  <p className={`text-sm font-medium ${
-                    appState.currentStep === step.key ? 'text-cyan-200' : 'text-slate-400'
-                  }`}>
-                    {step.label}
-                  </p>
-                </div>
-                {index < 5 && (
-                  <div className={`flex-1 h-0.5 mx-4 ${
-                    appState.currentStep === 'review' || 
-                    (step.key === 'contacts' && appState.contacts.length > 0) ||
-                    (step.key === 'template' && appState.template) ||
-                    (step.key === 'attachment' && appState.attachment) ||
-                    (step.key === 'preflight' && appState.attachment) ||
-                    (step.key === 'processing' && appState.operationId)
-                      ? 'bg-emerald-400/80' 
-                      : 'bg-slate-700/70'
-                  }`} />
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
         )}
 
         {/* Main Content */}
         <div className="card overflow-y-auto max-h-[calc(100vh-200px)]">
-          {appState.currentStep === 'home' && (
-            <CampaignHome onStartNewCampaign={startNewCampaign} />
+          {appState.currentStep === "home" && (
+            <CampaignHome
+              onStartNewCampaign={startNewCampaign}
+              onManageMembers={() => setAppState(prev => ({ ...prev, currentStep: 'team' }))}
+            />
           )}
 
-          {appState.currentStep === 'contacts' && (
-            <ContactImport 
+          {appState.currentStep === "team" && (
+            <MemberManager onBack={() => setAppState(prev => ({ ...prev, currentStep: 'home' }))} />
+          )}
+
+          {appState.currentStep === "contacts" && (
+            <ContactImport
               onContactsImported={handleContactsImported}
               onBack={() => {
                 backToCampaignHome();
               }}
             />
           )}
-          
-          {appState.currentStep === 'template' && (
-            <EnhancedTemplateEditor
-              template={appState.template}
+
+          {appState.currentStep === "template" && (
+            <TemplateManager
               contacts={appState.contacts}
-              availableVariables={Array.from(
-                new Set(
-                  appState.contacts.flatMap(contact =>
-                    Object.keys(contact).filter(key => !['id', 'name', 'email'].includes(key))
-                  )
-                )
-              )}
-              onSave={async (template) => {
-                await projectStore.saveTemplate({
-                  id: template.id,
-                  name: template.name,
-                  content: template.content,
-                  variables: template.variables,
-                  versions: [],
-                  category: template.category || '',
-                  tags: template.tags || [],
-                });
-                setAppState(prev => ({ ...prev, template }));
+              onTemplateSelected={(template) =>
+                handleTemplateSelected(template)
+              }
+              onBack={() => {
+                setAppState((prev) => ({ ...prev, currentStep: "contacts" }));
               }}
-              onDelete={async (templateId) => {
-                await projectStore.deleteTemplate(templateId);
-                if (appState.template?.id === templateId) {
-                  setAppState(prev => ({ ...prev, template: null }));
-                }
-              }}
-              onDuplicate={async (template) => {
-                const duplicated = {
-                  ...template,
-                  id: `template-${Date.now()}`,
-                  name: `${template.name} Copy`,
-                  versions: [],
-                  category: template.category || '',
-                  tags: template.tags || [],
-                };
-                await projectStore.saveTemplate(duplicated);
-              }}
-              onExport={(template) => {
-                // placeholder
-                console.log('Export', template);
-              }}
-              onImport={async (file) => {
-                // placeholder
-                console.log('Import', file);
-              }}
-            />
-          )}
-          
-          {appState.currentStep === 'attachment' && (
-            <AttachmentPicker 
-              onAttachmentSelected={handleAttachmentSelected}
-              onBack={() => setAppState(prev => ({ ...prev, currentStep: 'template' }))}
             />
           )}
 
-          {appState.currentStep === 'preflight' && (
+          {appState.currentStep === "attachment" && (
+            <AttachmentPicker
+              onAttachmentSelected={handleAttachmentSelected}
+              onBack={() =>
+                setAppState((prev) => ({ ...prev, currentStep: "template" }))
+              }
+            />
+          )}
+
+          {appState.currentStep === "preflight" && (
             <PreflightReview
               contacts={appState.contacts}
-              template={appState.template!}
+              templates={appState.templates}
+              defaultTemplateId={appState.template?.id || null}
               attachment={appState.attachment}
-              onBack={() => setAppState(prev => ({ ...prev, currentStep: 'attachment' }))}
-              onContinue={() => setAppState(prev => ({ ...prev, currentStep: 'processing' }))}
+              onBack={() =>
+                setAppState((prev) => ({ ...prev, currentStep: "attachment" }))
+              }
+              onContinue={() =>
+                setAppState((prev) => ({ ...prev, currentStep: "processing" }))
+              }
             />
           )}
-          
-          {appState.currentStep === 'processing' && (
-            <BatchProgress 
+
+          {appState.currentStep === "processing" && (
+            <BatchProgress
               contacts={appState.contacts}
-              template={appState.template!}
+              templates={appState.templates}
+              defaultTemplateId={appState.template?.id || null}
               attachment={appState.attachment!}
               onComplete={handleProcessingComplete}
-              onBack={() => setAppState(prev => ({ ...prev, currentStep: 'attachment' }))}
+              onBack={() =>
+                setAppState((prev) => ({ ...prev, currentStep: "attachment" }))
+              }
             />
           )}
-          
-          {appState.currentStep === 'review' && (
-            <ErrorReview 
+
+          {appState.currentStep === "review" && (
+            <ErrorReview
               operationId={appState.operationId!}
               campaignId={appState.campaignId || undefined}
-              results={appState.results}
+              results={appState.results as any}
               onReviewFailedContacts={() => {
-                setRestoredProjectNotice('Moved back to contacts so you can fix failed rows.');
-                setAppState(prev => ({ ...prev, currentStep: 'contacts' }));
+                setRestoredProjectNotice(
+                  "Moved back to contacts so you can fix failed rows.",
+                );
+                setAppState((prev) => ({ ...prev, currentStep: "contacts" }));
               }}
               onStartOver={backToCampaignHome}
             />

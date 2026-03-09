@@ -1,0 +1,170 @@
+export const defaultTemplates = [
+  {
+    id: "default-0",
+    name: "\ufeffDigikey",
+    content:
+      "Dear {{First Name}},\n\nMy name is {{Sender Name}}, and I am a part of CU Hyperloop, a dynamic student team at the University of Colorado Boulder that designs and builds an innovative tunnel boring machine every year. Our 12-ft long, 2000lb TBM designs previously earned us 2nd place in the world at The Boring Company\u2019s Not-A-Boring Competition, and we are poised to push even further this year. We are reaching out because since the club\u2019s beginning in 2017, Digikey has been one of the primary providers of electrical and mechanical components for our projects, and we believe you would be an invaluable partner for this year's success. \n\nBy providing this support, you would enable a team that is already deeply familiar with your product line to achieve global success. This support takes many forms, from in-kind donations of components and discounts to direct monetary sponsorship. In return, your partnership grants you exclusive recruitment access to our top engineers; prominent brand visibility with the Digikey logo on our TBM and all competition media; and alignment with a cutting-edge technical innovation project.\n\nAs a registered 501(c)(3), any sponsorship is tax-deductible. Attached is a detailed sponsorship deck outlining these benefits and tiers. Would you have any time this week for a brief call?\n\nSincerely,\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}",
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "CONTACT NAME",
+      "MY NAME",
+      "Sender Role",
+      "Sender Name",
+      "Sender Phone",
+      "Sender Major",
+      "Sender Email",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+  {
+    id: "default-1",
+    name: "The Robbins Company",
+    content:
+      "Dear {{First Name}},\n\nMy name is {{Sender Name}} with CU Hyperloop at the University of Colorado Boulder. As a student team dedicated to pushing the boundaries of autonomous tunneling, we have long looked to The Robbins Company as the ultimate benchmark for TBM engineering and grit.\n\nOur team designs and builds a 12-foot-long, 2,500lb TBM to compete on the world stage. Following our 2nd-place finish at The Boring Company\u2019s Not-A-Boring Competition, we are currently engineering our next-generation machine. We are reaching out because we believe a partnership with Robbins would bridge the gap between your decades of industry-defining expertise and our student-led technical innovation.\n\nWhile our scale is smaller, our engineering challenges are remarkably similar to the ones Robbins solves globally. By supporting our team, you are directly fostering the next generation of engineers who are already familiar with problems related to cutterhead torque, thrust systems, and autonomous steering.\n\nIn return, Robbins would be given exclusive access to a pool of CU Boulder\u2019s top engineering talent and prominent brand visibility with your logo.\n\nAs a registered 501(c)(3), any sponsorship is tax-deductible. I have attached our sponsorship deck, which outlines our technical goals and various partnership tiers.\n\nWould you be open to a brief call this week to discuss how we can Robbins at this year\u2019s competition?\n\nSincerely,\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}",
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "Sender Role",
+      "Sender Phone",
+      "Sender Name",
+      "Contact Name",
+      "Sender Major",
+      "Sender Email",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+  {
+    id: "default-2",
+    name: "General Tunneling 1",
+    content:
+      "Hello {{First Name}},\n\nMy name is {{Sender Name}}, and I\u2019m with CU Hyperloop, a student engineering team at the University of Colorado Boulder that designs and builds a fully functional tunnel boring machine each year. Our 12-foot, 2,000-pound TBM earned 2nd place globally at The Boring Company\u2019s Not-A-Boring Competition, and we\u2019re continuing to push boundaries in tunneling innovation.\n\nWe are reaching out to {{Company Name}} because we believe there is a profound technical alignment between your industry-defining expertise in tunneling and our mission to innovate within the trenchless sector. Beyond a traditional sponsorship, we view this as a strategic investment in the future of the tunneling workforce. By supporting our design and testing efforts, you gain a direct pipeline to a curated group of high-performing engineers who are already solving real-world challenges in cutterhead torque, autonomous steering, and structural integrity. Your partnership would bridge the gap between classroom theory and the grit required for large-scale underground infrastructure, ensuring that the next generation of engineers is trained on the same standards of excellence that {{Company Name}} represents.\n\nAs a registered 501(c)(3) organization, all sponsorships are tax-deductible. I have attached our sponsorship packet, which outlines our technical milestones and specific partnership tiers.\n\nWould you be open to a brief call this week to discuss how we can represent {{Company Name}} at this year\u2019s competition?\n\nBest regards,\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}",
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "Company Name",
+      "Name",
+      "Sender Role",
+      "Sender Name",
+      "Sender Phone",
+      "Sender Major",
+      "Sender Email",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+  {
+    id: "default-3",
+    name: "Skanska",
+    content:
+      'Hello Skanska Team,\n\nMy name is {{Sender Name}}, and I\u2019m with CU Hyperloop, a premier student engineering team at the University of Colorado Boulder. We design, manufacture, and operate a fully autonomous Tunnel Boring Machine (TBM) to compete in The Boring Company\u2019s international Not-A-Boring Competition.\n\nI am reaching out because Skanska\u2019s global leadership in complex infrastructure and commitment to sustainable construction deeply resonates with our mission. We are currently seeking monetary sponsorship to fuel our 2026\u20132027 development cycle, and we believe there is a powerful alignment between our hands-on research and your dedication to "building for a better society." \n\nOur team consists of approximately 50\u201370 student engineers who manage the entire lifecycle of a 2,000 lb, 12-foot-long TBM.  We don\'t just design on paper, we build hardware that competes at the highest global level. We are consistently ranked among the top teams globally, recently taking 2nd Place in the World and winning the Innovation Award for our unique propulsion system at the 2024 competition. \n\nAs a registered 501(c)(3), any sponsorship is tax-deductible. I have attached our sponsorship deck, which outlines our technical goals and various partnership tiers.\n\nWould you be open to a short call this week to discuss how Skanska can help us pave the way for a more efficient and sustainable future?  If you are not the best contact for sponsorship inquiries, I would greatly appreciate it if you could point me toward the right person.\n\nThank you for your time and for supporting the next generation of engineers.\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}',
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "Name",
+      "Sender Role",
+      "Sender Phone",
+      "Sender Name",
+      "Sender Major",
+      "Sender Email",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+  {
+    id: "default-4",
+    name: "3M",
+    content:
+      'Dear {{First Name}},\n\nMy name is {{Sender Name}}, and I am a part of CU Hyperloop, a student engineering team at the University of Colorado Boulder. Each year, we design and manufacture a 12-foot, 2,000-pound autonomous Tunnel Boring Machine (TBM) to compete on the global stage. After placing 2nd in the world at The Boring Company\u2019s Not-A-Boring Competition, we are now focused on pushing the limits of material durability and system reliability.\n\nWe are reaching out to 3M because our TBM must maintain high precision while operating in challenging underground conditions. Our machine faces constant vibration and debris, requiring the kind of durable adhesives, coatings, and thermal management solutions that 3M pioneered. We believe your expertise in materials science is a natural fit for our project, as we look to improve the resilience and reliability of our systems for this year\u2019s competition. By partnering with us, 3M is directly enabling a project that tests the boundaries of what your materials can achieve in the field.\n\nBeyond the technical application, this partnership offers 3M a direct connection to a group of CU Boulder\u2019s top-tier engineers who are already applying 3M\u2019s "Science. Applied to Life." philosophy to complex mechanical challenges.\n\nAs a registered 501(c)(3), all sponsorships are tax-deductible. I\u2019ve attached our sponsorship packet, which outlines our 2025 design goals and various partnership tiers.\n\nWould you be open to a short call this week to discuss how 3M can help us engineer a more resilient machine for this year\u2019s competition?\n\nBest regards,\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}',
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "Sender Role",
+      "Sender Phone",
+      "Sender Name",
+      "Contact Name",
+      "Sender Major",
+      "Sender Email",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+  {
+    id: "default-5",
+    name: "Exxon",
+    content:
+      "Hello ExxonMobil team,\n\nMy name is {{Sender Name}}, and I am a member of CU Hyperloop at the University of Colorado Boulder. We are a multidisciplinary, student-run engineering organization composed of approximately 40 undergraduate and graduate students. Each year, our team designs, builds, and tests a small-scale tunnel boring machine, managing the full project lifecycle from mechanical and electrical design to controls, software, PCB layout, and manufacturing.\n\nOur previous 12-foot, 2,000-pound TBM earned 2nd place globally in The Boring Company\u2019s Not-A-Boring Competition and received the Innovation Award for our propulsion system. These achievements reflect both the technical depth of our team and our commitment to solving complex, real-world engineering challenges.\n\nGiven ExxonMobil\u2019s leadership in large-scale engineering, infrastructure, and energy systems, we see strong alignment between your organization\u2019s mission and our work. CU Hyperloop provides students with hands-on experience in systems engineering, project management, and applied problem-solving skills directly relevant to the work performed at ExxonMobil. A partnership would offer ExxonMobil exclusive access to motivated, highly capable engineering and business talent while supporting the development of next-generation technical leaders.\n\nWe are a registered 501(c)(3) organization meaning any contribution can be tax deductible. We also offer logo placement on our TBM and team apparel, and of course, recruitment access to our engineering and business talent, all outlined in the attached packet. \n\nWould you be open to a brief 20\u201330 minute conversation this week or next to discuss potential sponsorship opportunities?\n\nBest regards,\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}",
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "Sender Role",
+      "Sender Phone",
+      "Sender Name",
+      "Sender Major",
+      "Sender Email",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+  {
+    id: "default-6",
+    name: "Delve Underground",
+    content:
+      "Hello Delve Underground team,\n\nI'm {{Sender Name}} and I'm part of CU Hyperloop at the University of Colorado Boulder. Each year, our 40-member student engineering team designs and builds a small-scale tunnel-boring machine, handling everything from mechanical and electrical design to software, GNC, PCB layout, and manufacturing. Previously, our 12-ft, 2,000 lb TBM earned 2nd place globally in The Boring Company\u2019s Not-A-Boring Competition and won the Innovation Award for our propulsion system. \n\nGiven Delve Underground\u2019s industry leadership in tunnel design and underground engineering, we see a strong alignment between your team\u2019s mission and ours. CU Hyperloop consists of CU Boulder\u2019s most committed engineering students, dedicated to building the future of U.S tunneling technology. Through this project, our team is developing the very technical and problem-solving skillsets essential to the work you do. A partnership would give Delve Underground direct access to passionate, innovative, and highly capable emerging engineering talent. In return, we are seeking financial sponsorship and professional guidance to help us continue our trajectory of growth, creativity, and project success.\n\nWe are a registered 501(c)(3) organization, meaning any contribution can be tax-deductible. We also offer logo placement on our TBM and team apparel, and of course, recruitment access to our engineering and business talent, all outlined in the attached packet. Would you have 20\u201330 minutes this week or next to discuss this in more detail? \n\nBest regards,\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}",
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "Sender Role",
+      "Sender Phone",
+      "Sender Name",
+      "Sender Major",
+      "Sender Email",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+  {
+    id: "default-7",
+    name: "Amtrak",
+    content:
+      "Hello {{Name}},\n\nMy name is {{Sender Name}}, and I\u2019m with CU Hyperloop, a student engineering team at the University of Colorado Boulder that designs and builds a fully functional tunnel boring machine each year. Our 12-foot, 2,000-pound TBM earned 2nd place globally at The Boring Company\u2019s Not-A-Boring Competition, and we\u2019re continuing to push boundaries in tunneling innovation.\n\nWe are reaching out to you because we believe our mission aligns directly with Amtrak\u2019s goals of modernization and operational excellence. By supporting our team, Amtrak is making a strategic investment in the future of the rail workforce. We provide a direct pipeline to high-performing engineers who are already solving complex challenges in tunneling automation, structural integrity, and remote monitoring\u2014the exact skills required to deliver and maintain America's busiest rail corridors. Your partnership would bridge the gap between classroom theory and the grit required for large-scale underground infrastructure, ensuring that the next generation of engineers is trained on the same standards of excellence that Amtrak represents.\n\nAs a registered 501(c)(3) organization, all sponsorships are tax-deductible. I have attached our sponsorship packet, which outlines our technical milestones and specific partnership tiers.\n\nWould you be open to a brief call this week to discuss how we can represent Amtrak at this year\u2019s competition?\n\nBest regards,\n\n{{Sender Name}}\nCU Hyperloop | {{Sender Role}}\nCU Boulder | {{Sender Major}}\n{{Sender Phone}} | {{Sender Email}}",
+    subjects: [
+      "CU Hyperloop // {{Company}}",
+      "Partnership Opportunity - CU Hyperloop",
+    ],
+    variables: [
+      "Sender Role",
+      "Name",
+      "Sender Name",
+      "Sender Email",
+      "Sender Major",
+      "Sender Phone",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: [],
+  },
+];
