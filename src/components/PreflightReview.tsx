@@ -90,6 +90,19 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       attachment && attachment.size > 25 * 1024 * 1024
         ? `Attachment is ${Math.round(attachment.size / (1024 * 1024))}MB; this may slow batch processing.`
         : null;
+    const missingCUHyperloop = contacts.filter((contact, index) => {
+      const activeTemplate = getTemplateForContact(contact);
+      if (!activeTemplate) return false;
+      const parsed = parseTemplateSections(activeTemplate.content);
+      const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
+        ? activeTemplate.subjects
+        : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
+      const selectedSubject = availableSubjects[index % availableSubjects.length];
+      if (!selectedSubject) return true;
+      const merged = mergeTemplate(selectedSubject, contact);
+      return !merged.toLowerCase().includes('cu hyperloop');
+    });
+
     const emptySubjectCount = contacts.filter((contact, index) => {
       const activeTemplate = getTemplateForContact(contact);
       if (!activeTemplate) return false;
@@ -121,6 +134,7 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       attachmentWarning,
       emptySubjectCount,
       emptyRecipientCount,
+      missingCUHyperloop,
     };
   }, [contacts, templates, defaultTemplateId, attachment]);
 
@@ -224,6 +238,20 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
               }
             >
               Empty recipients after merge: {checks.emptyRecipientCount}
+            </li>
+            <li
+              className={
+                checks.missingCUHyperloop.length > 0
+                  ? "text-yellow-500"
+                  : "text-emerald-400"
+              }
+            >
+              Missing "CU Hyperloop" in subject: {checks.missingCUHyperloop.length}
+              {checks.missingCUHyperloop.length > 0 && (
+                <span className="block text-xs mt-1">
+                  Power Automate won't send drafts without "CU Hyperloop" in the subject line.
+                </span>
+              )}
             </li>
             {checks.attachmentWarning && (
               <li className="text-yellow-500">{checks.attachmentWarning}</li>

@@ -40,7 +40,6 @@
   },
   "dependencies": {
     "@microsoft/microsoft-graph-client": "^3.0.7",
-    "better-sqlite3": "^9.2.2",
     "dotenv": "^17.3.0",
     "framer-motion": "^12.34.0",
     "keytar": "^7.9.0",

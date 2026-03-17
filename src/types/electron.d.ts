@@ -10,18 +10,24 @@ declare global {
       logout: () => Promise<boolean>;
       handleRedirect: (url: string, authContext?: { codeVerifier?: string; state?: string }) => Promise<any>;
       openExternal: (url: string) => Promise<void>;
-      enqueueSchedulerJob: (payload: {
-        campaignId: string;
-        messageIds: string[];
-        runAt: number;
-        folderName: string;
-        categoryName?: string;
-        maxAttempts?: number;
-      }) => Promise<any>;
-      listSchedulerJobs: () => Promise<any[]>;
-      pauseSchedulerJob: (jobId: string) => Promise<any>;
-      resumeSchedulerJob: (jobId: string) => Promise<any>;
-      cancelSchedulerJob: (jobId: string) => Promise<any>;
+      companySearch: (query: string, filters?: {
+        industry?: string;
+        size?: string;
+        location?: string;
+        excludeNames?: string[];
+        campaignDescription?: string;
+        refinement?: string;
+      }) => Promise<{
+        companies: Array<{
+          name: string;
+          website: string;
+          reasoning: string;
+          estimatedSize?: string;
+          industry?: string;
+          suggestedContactTitles?: string[];
+          relevanceScore?: number;
+        }>;
+      }>;
       onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => () => void;
     };
   }

@@ -13,8 +13,12 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
     throw new Error('CSV must have at least a header row and one data row');
   }
 
+  const tabCount = (lines[0].match(/\t/g) || []).length;
+  const commaCount = (lines[0].match(/,/g) || []).length;
+  const delimiter = tabCount > commaCount ? '\t' : ',';
+
   // Parse header row
-  const headers = parseCSVLine(lines[0]);
+  const headers = parseCSVLine(lines[0], delimiter);
   const emailIndex = headers.findIndex(h =>
     h.toLowerCase().includes('email') || h.toLowerCase().includes('e-mail')
   );
@@ -33,7 +37,7 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
     const line = lines[i].trim();
     if (!line) continue; // Skip empty lines
 
-    const values = parseCSVLine(line);
+    const values = parseCSVLine(line, delimiter);
     if (values.length !== headers.length) {
       console.warn(`Row ${i + 1}: Column count mismatch (${values.length} vs ${headers.length})`);
       continue;
@@ -99,7 +103,7 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
   return contacts;
 }
 
-function parseCSVLine(line: string): string[] {
+function parseCSVLine(line: string, delimiter: string = ','): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -116,7 +120,7 @@ function parseCSVLine(line: string): string[] {
         continue;
       }
       inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       result.push(current.trim());
       current = '';
     } else {

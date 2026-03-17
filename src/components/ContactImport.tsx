@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { parseCSV, validateEmail } from "../utils/csvParser";
+import { parseCSV, ParsedContact, validateEmail } from "../utils/csvParser";
 import { projectStore, StoredTemplate } from "../services/projectStore";
 
 interface Contact {
@@ -13,11 +13,13 @@ interface Contact {
 interface ContactImportProps {
   onContactsImported: (contacts: Contact[]) => void;
   onBack: () => void;
+  campaignId?: string;
 }
 
 export const ContactImport: React.FC<ContactImportProps> = ({
   onContactsImported,
   onBack,
+  campaignId,
 }) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,6 +34,8 @@ export const ContactImport: React.FC<ContactImportProps> = ({
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragSelectMode, setDragSelectMode] = useState(true);
+
+  const [pastedText, setPastedText] = useState("");
 
   useEffect(() => {
     projectStore.listTemplates().then(setTemplates).catch(console.error);
@@ -54,6 +58,81 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     setValidationErrors(errors);
   };
 
+  const loadParsedContacts = async (parsedContacts: ParsedContact[]) => {
+    const currentTemplates = await projectStore.listTemplates();
+
+    const seenLower = new Set<string>(["name", "email"]);
+    const discoveredHeaders: string[] = ["name", "email"];
+    parsedContacts.forEach((contact) => {
+      Object.keys(contact).forEach((key) => {
+        const lower = key.toLowerCase();
+        if (!seenLower.has(lower)) {
+          seenLower.add(lower);
+          discoveredHeaders.push(key);
+        }
+      });
+    });
+    setHeaders(discoveredHeaders);
+
+    const normalizedContacts: Contact[] = [];
+
+    // Build a canonical key map: first occurrence of each lowercase key wins
+    const canonicalKeys = new Map<string, string>();
+    parsedContacts.forEach((contact) => {
+      Object.keys(contact).forEach((key) => {
+        const lower = key.toLowerCase();
+        if (!canonicalKeys.has(lower)) {
+          canonicalKeys.set(lower, key);
+        }
+      });
+    });
+
+    parsedContacts.forEach((contact, index) => {
+      // Normalize keys so "Name" and "name" merge into a single canonical key
+      const normalized: Record<string, any> = {};
+      for (const [k, v] of Object.entries(contact)) {
+        const canonical = canonicalKeys.get(k.toLowerCase()) || k;
+        if (!(canonical in normalized)) {
+          normalized[canonical] = v;
+        }
+      }
+
+      const { name, email, templateId, ...rest } = normalized as any;
+      const cleanRest: Record<string, string> = {};
+      let mappedTemplateId = templateId || undefined;
+
+      for (const [k, v] of Object.entries(rest)) {
+        if (v !== null && v !== undefined) {
+          cleanRest[k] = String(v);
+          if (k.toLowerCase() === 'template' && !mappedTemplateId && typeof v === 'string' && v.trim()) {
+            const searchLower = v.trim().toLowerCase();
+            const found = currentTemplates.find(t => {
+              const templateLower = t.name.toLowerCase();
+              return templateLower === searchLower ||
+                templateLower.includes(searchLower) ||
+                searchLower.includes(templateLower);
+            });
+            if (found) mappedTemplateId = found.id;
+          }
+        }
+      }
+      normalizedContacts.push({
+        id: `contact-${Date.now()}-${index}`,
+        name: name || email,
+        email: email,
+        templateId: mappedTemplateId,
+        ...cleanRest,
+      });
+    });
+
+    setContacts(normalizedContacts);
+    revalidate(normalizedContacts);
+
+    if (normalizedContacts.length === 0) {
+      setError("No valid contacts found. Please check your data format.");
+    }
+  };
+
   const handleFileSelect = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -67,59 +146,29 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     try {
       const text = await file.text();
       const parsedContacts = await parseCSV(text);
-      const currentTemplates = await projectStore.listTemplates();
-
-      const discoveredHeaders = Array.from(
-        parsedContacts.reduce(
-          (acc, contact) => {
-            Object.keys(contact).forEach((key) => acc.add(key));
-            return acc;
-          },
-          new Set<string>(["name", "email"]),
-        ),
-      );
-      setHeaders(discoveredHeaders);
-
-      const normalizedContacts: Contact[] = [];
-
-      parsedContacts.forEach((contact, index) => {
-        const { name, email, templateId, ...rest } = contact;
-        const cleanRest: Record<string, string> = {};
-        let mappedTemplateId = templateId || undefined;
-
-        for (const [k, v] of Object.entries(rest)) {
-          if (v !== null && v !== undefined) {
-            cleanRest[k] = v;
-            if (k.toLowerCase() === 'template' && !mappedTemplateId && typeof v === 'string' && v.trim()) {
-              const searchLower = v.trim().toLowerCase();
-              const found = currentTemplates.find(t => {
-                const templateLower = t.name.toLowerCase();
-                return templateLower === searchLower ||
-                  templateLower.includes(searchLower) ||
-                  searchLower.includes(templateLower);
-              });
-              if (found) mappedTemplateId = found.id;
-            }
-          }
-        }
-        normalizedContacts.push({
-          id: `contact-${Date.now()}-${index}`,
-          name: name || email,
-          email: email,
-          templateId: mappedTemplateId,
-          ...cleanRest,
-        });
-      });
-
-      setContacts(normalizedContacts);
-      revalidate(normalizedContacts);
-
-      if (normalizedContacts.length === 0) {
-        setError("No valid contacts found. Please check your CSV format.");
-      }
+      await loadParsedContacts(parsedContacts);
     } catch (err) {
       console.error("CSV parsing error:", err);
       setError("Failed to parse CSV file. Please check the format.");
+    } finally {
+      setIsLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handlePastedTextSubmit = async () => {
+    if (!pastedText.trim()) return;
+    setIsLoading(true);
+    setError(null);
+    setValidationErrors([]);
+
+    try {
+      const parsedContacts = await parseCSV(pastedText);
+      await loadParsedContacts(parsedContacts);
+      setPastedText("");
+    } catch (err) {
+      console.error("Paste parsing error:", err);
+      setError("Failed to parse pasted text. Please check the format.");
     } finally {
       setIsLoading(false);
     }
@@ -258,7 +307,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     revalidate(next);
   };
 
-  const applyBulkAction = (action: "trim" | "dedupe" | "invalid-only") => {
+  const applyBulkAction = (action: "trim" | "dedupe" | "invalid-only" | "extract-first-name") => {
     let next = [...contacts];
     if (action === "trim") {
       next = next.map((contact) => {
@@ -281,6 +330,29 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     }
     if (action === "invalid-only") {
       next = next.filter((contact) => validateEmail(contact.email));
+    }
+    if (action === "extract-first-name") {
+      next = next.map((contact) => {
+        // Extract first name from the normalized lowercase `name` field
+        const rawName = (contact.name || "").trim();
+        if (!rawName) return contact;
+        const firstName = rawName.split(/\s+/)[0];
+
+        const updated: Contact = { ...contact, name: firstName };
+
+        // Also strip any raw CSV header columns that hold name-like values
+        // e.g. "Name", "First Name", "Full Name" — so {{Name}} in templates is also first-name-only
+        const rec = updated as Record<string, string | null | undefined>;
+        Object.keys(rec).forEach((key) => {
+          const lk = key.toLowerCase().replace(/[^a-z]/g, "");
+          if ((lk === "name" || lk === "firstname" || lk === "fullname") && key !== "id") {
+            const val = ((rec[key] as string) || "").trim();
+            if (val) rec[key] = val.split(/\s+/)[0];
+          }
+        });
+
+        return updated;
+      });
     }
     setContacts(next);
     revalidate(next);
@@ -317,17 +389,17 @@ export const ContactImport: React.FC<ContactImportProps> = ({
 
   useEffect(() => {
     if (contacts.length === 0) return;
-    const nextHeaders = Array.from(
-      contacts.reduce(
-        (acc, contact) => {
-          Object.keys(contact).forEach((key) => {
-            if (key !== "id" && key.toLowerCase() !== "template") acc.add(key);
-          });
-          return acc;
-        },
-        new Set<string>(["name", "email"]),
-      ),
-    );
+    const seenLower = new Set<string>(["name", "email"]);
+    const nextHeaders: string[] = ["name", "email"];
+    contacts.forEach((contact) => {
+      Object.keys(contact).forEach((key) => {
+        const lower = key.toLowerCase();
+        if (lower !== "id" && lower !== "template" && !seenLower.has(lower)) {
+          seenLower.add(lower);
+          nextHeaders.push(key);
+        }
+      });
+    });
     setHeaders(nextHeaders);
   }, [contacts]);
 
@@ -405,6 +477,23 @@ export const ContactImport: React.FC<ContactImportProps> = ({
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="text-center text-sm font-medium text-slate-400">OR</div>
+        <textarea
+          className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl p-4 text-sm text-slate-300 focus:border-yellow-500/50 focus:ring focus:ring-yellow-500/20 mb-2 min-h-[120px] resize-y placeholder-slate-600 focus:outline-none transition-all"
+          placeholder="Paste columns from Excel, Google Sheets, or any tab/comma separated text here..."
+          value={pastedText}
+          onChange={(e) => setPastedText(e.target.value)}
+        />
+        <button
+          className="btn-secondary w-full py-3 border-dashed hover:border-solid bg-slate-800/50 hover:bg-slate-800 transition-all font-medium text-slate-300 hover:text-white"
+          onClick={handlePastedTextSubmit}
+          disabled={isLoading || !pastedText.trim()}
+        >
+          {isLoading ? "Processing..." : "Import from Pasted Text"}
+        </button>
       </div>
 
       {/* Sample CSV Download */}
@@ -551,6 +640,12 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => applyBulkAction("extract-first-name")}
+                  className="btn-secondary text-xs !py-1.5"
+                >
+                  Extract first names
+                </button>
                 <button
                   onClick={() => applyBulkAction("trim")}
                   className="btn-secondary text-xs !py-1.5"

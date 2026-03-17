@@ -70,10 +70,10 @@ export class LocalProjectStore implements ProjectStore {
 
     // Auto-seed to replace outdated variables in localStorage automatically
     // And completely scrub older templates that got duplicated
-    if (!window.localStorage.getItem("seeded_v8")) {
+    if (!window.localStorage.getItem("seeded_v11")) {
       templates = defaultTemplates as StoredTemplate[];
       window.localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
-      window.localStorage.setItem("seeded_v8", "true");
+      window.localStorage.setItem("seeded_v11", "true");
     }
 
     // Actively filter out the duplicates that have "Monetary Outreach -" prefix

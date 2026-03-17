@@ -5,6 +5,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const { AuthService } = require('./auth');
+const { CompanyGeneratorService } = require('./companyGeneratorService');
 
 const isDev = process.env.NODE_ENV === 'development';
 const OAUTH_PORT = 3000;
@@ -250,6 +251,17 @@ ipcMain.handle('app:open-external', async (_: any, url: string) => {
     return true;
   } catch (error) {
     console.error('Open external error:', error);
+    throw error;
+  }
+});
+
+// Company Discovery Handler
+ipcMain.handle('company:search', async (_: any, query: string, filters?: { industry?: string; size?: string; location?: string; excludeNames?: string[]; campaignDescription?: string; refinement?: string }) => {
+  try {
+    const generator = new CompanyGeneratorService();
+    return await generator.search(query, filters);
+  } catch (error) {
+    console.error('Company search error:', error);
     throw error;
   }
 });

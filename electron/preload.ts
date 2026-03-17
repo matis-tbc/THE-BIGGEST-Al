@@ -14,6 +14,14 @@ declare global {
       logout: () => Promise<boolean>;
       handleRedirect: (url: string, authContext?: { codeVerifier?: string; state?: string }) => Promise<any>;
       openExternal: (url: string) => Promise<void>;
+      companySearch: (query: string, filters?: {
+        industry?: string;
+        size?: string;
+        location?: string;
+        excludeNames?: string[];
+        campaignDescription?: string;
+        refinement?: string;
+      }) => Promise<any>;
       onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => () => void;
     };
   }
@@ -30,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   logout: () => ipcRenderer.invoke('auth:logout'),
   handleRedirect: (url: string, authContext?: { codeVerifier?: string; state?: string }) => ipcRenderer.invoke('auth:handle-redirect', url, authContext),
   openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
+  companySearch: (query: string, filters?: Record<string, any>) => ipcRenderer.invoke('company:search', query, filters),
   onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => {
     const handler = (_: any, result: { success: boolean; message?: string }) => callback(result);
     ipcRenderer.on('auth:completed', handler);

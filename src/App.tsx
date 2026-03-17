@@ -7,16 +7,17 @@ import { PreflightReview } from "./components/PreflightReview";
 import { BatchProgress } from "./components/BatchProgress";
 import { ErrorReview } from "./components/ErrorReview";
 import { RendererErrorOverlay } from "./components/RendererErrorOverlay";
+import { CompanyGenerator } from "./components/CompanyGenerator";
+import { CampaignDetail } from "./components/CampaignDetail";
 import { seedTemplates } from "./utils/seedTemplates";
 import { CampaignHome } from "./components/CampaignHome";
 import { MemberManager } from "./components/MemberManager";
 import { projectStore } from "./services/projectStore";
-import { campaignStore, MessageStatus } from "./services/campaignStore";
-import { syncSchedulerResults } from "./services/campaignSync";
+import { campaignStore } from "./services/campaignStore";
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 
-interface Contact {
+export interface Contact {
   id: string;
   name: string;
   email: string;
@@ -38,19 +39,24 @@ interface AppState {
   | "auth"
   | "home"
   | "contacts"
+  | "leadgen"
   | "team"
   | "template"
   | "attachment"
   | "preflight"
   | "processing"
-  | "review";
+  | "review"
+  | "campaign-detail"
+  | "campaign-leadgen"
+  | "campaign-contacts"
+  | "campaign-template";
   contacts: Contact[];
   template: Template | null;
   attachment: File | null;
   operationId: string | null;
-  campaignId: string | null;
   results: ProcessingResult[];
   templates: Template[];
+  activeCampaignId: string | null;
 }
 
 interface ProcessingResult {
@@ -75,9 +81,9 @@ function App() {
     template: null,
     attachment: null,
     operationId: null,
-    campaignId: null,
     results: [],
     templates: [],
+    activeCampaignId: null,
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -94,7 +100,6 @@ function App() {
       "[App] Renderer booted. electronAPI available:",
       Boolean(window.electronAPI),
     );
-    // Seed the monetary templates if they are missing
     seedTemplates().catch(console.error);
   }, []);
 
@@ -136,7 +141,6 @@ function App() {
   }, [appState.currentStep, appState.template, appState.attachment, appState.contacts]);
 
   useEffect(() => {
-    // Check if user is already authenticated
     checkAuthStatus();
   }, []);
 
@@ -159,16 +163,6 @@ function App() {
           if (profile) {
             setAuthenticatedUser(profile);
           }
-        }
-        const recentProject = (await projectStore.listProjects())[0];
-        if (recentProject && recentProject.contacts.length > 0) {
-          setAppState((prev) => ({
-            ...prev,
-            contacts: recentProject.contacts as Contact[],
-          }));
-          setRestoredProjectNotice(
-            `Restored recent project "${recentProject.name}".`,
-          );
         }
         const savedTemplates = await projectStore.listTemplates();
         setAppState((prev) => ({
@@ -217,6 +211,14 @@ function App() {
 
   const handleContactsImported = async (contacts: Contact[]) => {
     console.info("[App] Imported contacts:", contacts.length);
+
+    // If in campaign context, save to campaign and go back to detail
+    if (appState.activeCampaignId && appState.currentStep === "campaign-contacts") {
+      campaignStore.setContacts(appState.activeCampaignId, contacts);
+      setAppState(prev => ({ ...prev, currentStep: "campaign-detail" }));
+      return;
+    }
+
     const allHaveTemplates = contacts.length > 0 && contacts.every((c) => !!c.templateId);
 
     if (allHaveTemplates) {
@@ -241,13 +243,21 @@ function App() {
       template: null,
       attachment: null,
       operationId: null,
-      campaignId: null,
       results: [],
+      activeCampaignId: null,
     }));
   };
 
   const handleTemplateSelected = async (template: Template) => {
     console.info("[App] Template selected:", template.id);
+
+    // If in campaign context, save to campaign and go back to detail
+    if (appState.activeCampaignId && appState.currentStep === "campaign-template") {
+      campaignStore.setTemplateId(appState.activeCampaignId, template.id);
+      setAppState(prev => ({ ...prev, currentStep: "campaign-detail" }));
+      return;
+    }
+
     const savedTemplates = await projectStore.listTemplates();
     setAppState((prev) => ({
       ...prev,
@@ -291,70 +301,24 @@ function App() {
       };
     });
 
-    const campaignId = `camp-${Date.now()}`;
-    const toMessageStatus = (
-      status: ProcessingResult["status"],
-    ): MessageStatus => {
-      if (status === "completed") return "drafted";
-      if (status === "failed") return "failed";
-      return "drafted";
-    };
-
-    void (async () => {
-      try {
-        await campaignStore.createCampaign({
-          id: campaignId,
-          name: appState.template?.name
-            ? `${appState.template.name} (${new Date().toLocaleString()})`
-            : `Campaign ${new Date().toLocaleString()}`,
-          templateId: appState.template?.id,
-          attachmentName: appState.attachment?.name,
-        });
-        await campaignStore.upsertMessages(
-          enrichedResults.map((item) => ({
-            id: `msg-${campaignId}-${item.contactId}`,
-            campaignId,
-            contactId: item.contactId,
-            contactName: item.name,
-            contactEmail: item.email,
-            messageId: item.messageId,
-            status: toMessageStatus(item.status),
-            draftCreatedAt:
-              item.status === "completed"
-                ? new Date().toISOString()
-                : undefined,
-            error: item.error,
-            updatedAt: new Date().toISOString(),
-          })),
-        );
-        await campaignStore.createEvents(
-          enrichedResults.map((item) => ({
-            campaignId,
-            messageId: item.messageId,
-            contactId: item.contactId,
-            type: item.status === "completed" ? "draft_created" : "send_failed",
-            detail:
-              item.status === "completed"
-                ? "Draft created in Outlook."
-                : item.error || "Draft creation failed",
-          })),
-        );
-        const hasFailures = enrichedResults.some(
-          (item) => item.status === "failed",
-        );
-        await campaignStore.updateCampaignStatus(
-          campaignId,
-          hasFailures ? "failed" : "drafted",
-        );
-      } catch (error) {
-        console.error("Failed to persist campaign records:", error);
-      }
-    })();
+    // If in campaign context, save run
+    if (appState.activeCampaignId) {
+      const successCount = enrichedResults.filter(r => r.status === 'completed').length;
+      const failCount = enrichedResults.filter(r => r.status === 'failed').length;
+      campaignStore.addRun(appState.activeCampaignId, {
+        id: operationId,
+        timestamp: new Date().toISOString(),
+        templateId: appState.template?.id || null,
+        attachmentName: appState.attachment?.name || null,
+        contactCount: enrichedResults.length,
+        successCount,
+        failCount,
+      });
+    }
 
     setAppState((prev) => ({
       ...prev,
       operationId,
-      campaignId,
       results: enrichedResults,
       currentStep: "review",
     }));
@@ -369,9 +333,9 @@ function App() {
       template: null,
       attachment: null,
       operationId: null,
-      campaignId: null,
       results: [],
       templates: [],
+      activeCampaignId: null,
     });
     setTokenExpiry(null);
     setRestoredProjectNotice(null);
@@ -385,13 +349,57 @@ function App() {
       template: null,
       attachment: null,
       operationId: null,
-      campaignId: null,
       results: [],
+      activeCampaignId: null,
+    }));
+  };
+
+  const backToCampaignDetail = () => {
+    setAppState(prev => ({
+      ...prev,
+      currentStep: "campaign-detail",
+      contacts: [],
+      template: null,
+      attachment: null,
+      operationId: null,
+      results: [],
+    }));
+  };
+
+  const openCampaign = (id: string) => {
+    setAppState(prev => ({
+      ...prev,
+      activeCampaignId: id,
+      currentStep: "campaign-detail",
+    }));
+  };
+
+  const runCampaign = async () => {
+    if (!appState.activeCampaignId) return;
+    const campaign = campaignStore.getCampaign(appState.activeCampaignId);
+    if (!campaign) return;
+
+    const savedTemplates = await projectStore.listTemplates();
+    const template = savedTemplates.find(t => t.id === campaign.templateId);
+
+    setAppState(prev => ({
+      ...prev,
+      contacts: campaign.contacts,
+      template: template ? {
+        id: template.id,
+        name: template.name,
+        subjects: template.subjects,
+        content: template.content,
+        variables: template.variables,
+      } : null,
+      templates: savedTemplates as unknown as Template[],
+      currentStep: "attachment",
     }));
   };
 
   useEffect(() => {
     if (!appState.isAuthenticated) return;
+    if (appState.activeCampaignId) return; // Don't autosave when in campaign mode
     const snapshot = {
       id: "active-project",
       name: "Current Drafting Session",
@@ -408,20 +416,8 @@ function App() {
     appState.contacts,
     appState.template,
     appState.attachment,
+    appState.activeCampaignId,
   ]);
-
-  useEffect(() => {
-    if (!appState.isAuthenticated) return;
-    syncSchedulerResults().catch((error) => {
-      console.error("Initial scheduler sync failed:", error);
-    });
-    const timer = window.setInterval(() => {
-      syncSchedulerResults().catch((error) => {
-        console.error("Periodic scheduler sync failed:", error);
-      });
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [appState.isAuthenticated]);
 
   if (isLoading) {
     return (
@@ -452,6 +448,11 @@ function App() {
       </div>
     );
   }
+
+  // Determine if we're in the linear flow (non-campaign steps that show the stepper)
+  const linearFlowSteps = ["contacts", "template", "attachment", "preflight", "processing", "review"];
+  const showStepper = linearFlowSteps.includes(appState.currentStep) ||
+    (appState.activeCampaignId && ["attachment", "preflight", "processing", "review"].includes(appState.currentStep));
 
   return (
     <div className="h-full bg-slate-900 relative text-slate-100">
@@ -513,7 +514,7 @@ function App() {
         </motion.div>
 
         {/* Progress Steps */}
-        {appState.currentStep !== "home" && (
+        {showStepper && (
           <div className="mb-8">
             <div className="flex items-center justify-between gap-2">
               {[
@@ -575,7 +576,7 @@ function App() {
         <div className="card overflow-y-auto max-h-[calc(100vh-200px)]">
           {appState.currentStep === "home" && (
             <CampaignHome
-              onStartNewCampaign={startNewCampaign}
+              onOpenCampaign={openCampaign}
               onManageMembers={() => setAppState(prev => ({ ...prev, currentStep: 'team' }))}
             />
           )}
@@ -584,12 +585,60 @@ function App() {
             <MemberManager onBack={() => setAppState(prev => ({ ...prev, currentStep: 'home' }))} />
           )}
 
+          {appState.currentStep === "campaign-detail" && appState.activeCampaignId && (
+            <CampaignDetail
+              campaignId={appState.activeCampaignId}
+              onBack={backToCampaignHome}
+              onOpenLeadGen={() => setAppState(prev => ({ ...prev, currentStep: 'campaign-leadgen' }))}
+              onOpenContacts={() => setAppState(prev => ({ ...prev, currentStep: 'campaign-contacts' }))}
+              onOpenTemplate={() => setAppState(prev => ({ ...prev, currentStep: 'campaign-template' }))}
+              onRunCampaign={runCampaign}
+            />
+          )}
+
+          {appState.currentStep === "campaign-leadgen" && appState.activeCampaignId && (
+            <CompanyGenerator
+              campaignId={appState.activeCampaignId}
+              campaignDescription={campaignStore.getCampaign(appState.activeCampaignId)?.description}
+              existingCompanies={campaignStore.getCampaign(appState.activeCampaignId)?.companies || []}
+              onLeadsImported={handleContactsImported}
+              onSaveToCampaign={(companies) => {
+                campaignStore.addCompanies(appState.activeCampaignId!, companies);
+                setAppState(prev => ({ ...prev, currentStep: 'campaign-detail' }));
+              }}
+              onBack={backToCampaignDetail}
+            />
+          )}
+
+          {appState.currentStep === "leadgen" && (
+            <CompanyGenerator
+              onLeadsImported={handleContactsImported}
+              onBack={() => setAppState(prev => ({ ...prev, currentStep: 'home' }))}
+            />
+          )}
+
+          {appState.currentStep === "campaign-contacts" && appState.activeCampaignId && (
+            <ContactImport
+              campaignId={appState.activeCampaignId}
+              onContactsImported={handleContactsImported}
+              onBack={backToCampaignDetail}
+            />
+          )}
+
           {appState.currentStep === "contacts" && (
             <ContactImport
               onContactsImported={handleContactsImported}
               onBack={() => {
                 backToCampaignHome();
               }}
+            />
+          )}
+
+          {appState.currentStep === "campaign-template" && appState.activeCampaignId && (
+            <TemplateManager
+              contacts={campaignStore.getCampaign(appState.activeCampaignId)?.contacts || []}
+              onTemplateSelected={handleTemplateSelected}
+              onBack={backToCampaignDetail}
             />
           )}
 
@@ -645,7 +694,6 @@ function App() {
           {appState.currentStep === "review" && (
             <ErrorReview
               operationId={appState.operationId!}
-              campaignId={appState.campaignId || undefined}
               results={appState.results as any}
               onReviewFailedContacts={() => {
                 setRestoredProjectNotice(
@@ -653,7 +701,7 @@ function App() {
                 );
                 setAppState((prev) => ({ ...prev, currentStep: "contacts" }));
               }}
-              onStartOver={backToCampaignHome}
+              onStartOver={appState.activeCampaignId ? backToCampaignDetail : backToCampaignHome}
             />
           )}
         </div>
