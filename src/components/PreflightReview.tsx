@@ -52,6 +52,9 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     let templateErrors: string[] = [];
     let templateWarnings: string[] = [];
 
+    // Per-contact issue tracking
+    const contactIssues: { contact: Contact; errors: string[]; warnings: string[]; templateName: string }[] = [];
+
     // Validate templates for each contact
     contacts.forEach((contact) => {
       const activeTemplate = getTemplateForContact(contact);
@@ -59,10 +62,22 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
         const validation = validateTemplate(activeTemplate.content, [contact]);
         templateErrors = [...templateErrors, ...validation.errors];
         templateWarnings = [...templateWarnings, ...validation.warnings];
+        if (validation.errors.length > 0 || validation.warnings.length > 0) {
+          contactIssues.push({
+            contact,
+            errors: validation.errors,
+            warnings: validation.warnings,
+            templateName: activeTemplate.name,
+          });
+        }
+      } else {
+        const msg = "No template assigned";
+        templateErrors.push(msg);
+        contactIssues.push({ contact, errors: [msg], warnings: [], templateName: "(none)" });
       }
     });
 
-    // Deduplicate
+    // Deduplicate summary counts
     templateErrors = Array.from(new Set(templateErrors));
     templateWarnings = Array.from(new Set(templateWarnings));
 
@@ -70,6 +85,7 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       errors: templateErrors,
       warnings: templateWarnings,
       isValid: templateErrors.length === 0,
+      contactIssues,
     };
 
     const invalidEmails = contacts.filter(
@@ -127,6 +143,29 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       return !contact.email.trim();
     }).length;
 
+    // Subject distribution stats: group by raw pattern, show merged example
+    const subjectGroups = new Map<string, { count: number; example: string }>();
+    contacts.forEach((contact, index) => {
+      const activeTemplate = getTemplateForContact(contact);
+      if (!activeTemplate) return;
+      const parsed = parseTemplateSections(activeTemplate.content);
+      const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
+        ? activeTemplate.subjects
+        : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
+      const selectedSubject = availableSubjects[index % availableSubjects.length];
+      if (selectedSubject) {
+        const existing = subjectGroups.get(selectedSubject);
+        if (existing) {
+          existing.count++;
+        } else {
+          subjectGroups.set(selectedSubject, {
+            count: 1,
+            example: mergeTemplate(selectedSubject, contact),
+          });
+        }
+      }
+    });
+
     return {
       invalidEmails,
       duplicateEmailCount,
@@ -135,6 +174,7 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       emptySubjectCount,
       emptyRecipientCount,
       missingCUHyperloop,
+      subjectGroups,
     };
   }, [contacts, templates, defaultTemplateId, attachment]);
 
@@ -257,12 +297,66 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
               <li className="text-yellow-500">{checks.attachmentWarning}</li>
             )}
           </ul>
-          {checks.templateValidation.errors.length > 0 && (
-            <ul className="mt-3 text-xs text-rose-300 list-disc list-inside">
-              {checks.templateValidation.errors.map((error) => (
-                <li key={error}>{error}</li>
-              ))}
-            </ul>
+          {/* Per-contact issue details */}
+          {checks.templateValidation.contactIssues.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-700">
+              <h4 className="text-xs font-medium text-slate-400 mb-2">
+                {checks.templateValidation.contactIssues.length} contact{checks.templateValidation.contactIssues.length !== 1 ? "s" : ""} with issues
+              </h4>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {checks.templateValidation.contactIssues.map((issue, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs bg-slate-900/50 rounded-lg px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-200 font-medium truncate">{issue.contact.name}</span>
+                        <span className="text-slate-500 truncate">{issue.contact.email}</span>
+                        <span className="text-slate-600 flex-shrink-0">({issue.templateName})</span>
+                      </div>
+                      {issue.errors.map((e, j) => (
+                        <div key={`e${j}`} className="text-rose-400 mt-0.5">{e}</div>
+                      ))}
+                      {issue.warnings.map((w, j) => (
+                        <div key={`w${j}`} className="text-yellow-500/80 mt-0.5">{w}</div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const idx = contacts.findIndex(c => c.id === issue.contact.id);
+                        if (idx >= 0) setPreviewIndex(idx);
+                      }}
+                      className="text-yellow-500 hover:text-yellow-400 flex-shrink-0 mt-0.5"
+                      title="Preview this contact"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Subject Distribution */}
+          {checks.subjectGroups.size > 1 && (
+            <div className="mt-4 pt-3 border-t border-slate-700">
+              <h4 className="text-xs font-medium text-slate-400 mb-2">Subject Distribution</h4>
+              <div className="space-y-1.5">
+                {Array.from(checks.subjectGroups.entries()).map(([, group], i) => {
+                  const pct = Math.round((group.count / contacts.length) * 100);
+                  const letter = String.fromCharCode(65 + i);
+                  const display = group.example || "(empty)";
+                  return (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-yellow-500/20 text-yellow-500 font-mono font-bold text-[10px] flex-shrink-0">{letter}</span>
+                      <span className="text-slate-400 truncate flex-1" title={display}>{display.length > 45 ? display.slice(0, 45) + "..." : display}</span>
+                      <span className="text-slate-500 flex-shrink-0">{group.count} ({pct}%)</span>
+                      <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden flex-shrink-0">
+                        <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
 
@@ -292,9 +386,22 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
                 <span className="font-semibold text-slate-200">To:</span>{" "}
                 {preview.to}
               </p>
-              <p>
-                <span className="font-semibold text-slate-200">Subject:</span>{" "}
-                {preview.subject || "(empty)"}
+              <p className="flex items-center gap-2">
+                <span className="font-semibold text-slate-200">Subject:</span>
+                {checks.subjectGroups.size > 1 && (() => {
+                  const activeTemplate = getTemplateForContact(selectedContact);
+                  if (!activeTemplate) return null;
+                  const parsed = parseTemplateSections(activeTemplate.content);
+                  const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
+                    ? activeTemplate.subjects
+                    : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
+                  const variantIndex = previewIndex % availableSubjects.length;
+                  const letter = String.fromCharCode(65 + variantIndex);
+                  return (
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-yellow-500/20 text-yellow-500 font-mono font-bold text-[9px]">{letter}</span>
+                  );
+                })()}
+                <span>{preview.subject || "(empty)"}</span>
               </p>
               <div
                 className="bg-white border border-slate-300 rounded-lg p-4 max-h-64 overflow-y-auto text-gray-900"

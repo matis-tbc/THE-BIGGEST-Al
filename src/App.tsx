@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AuthScreen } from "./components/AuthScreen";
 import { ContactImport } from "./components/ContactImport";
 import { TemplateManager } from "./components/TemplateManager";
@@ -9,6 +9,9 @@ import { ErrorReview } from "./components/ErrorReview";
 import { RendererErrorOverlay } from "./components/RendererErrorOverlay";
 import { CompanyGenerator } from "./components/CompanyGenerator";
 import { CampaignDetail } from "./components/CampaignDetail";
+import { SplashScreen } from "./components/SplashScreen";
+import { TunnelPlayground } from "./components/TunnelPlayground";
+import { CommandPalette } from "./components/CommandPalette";
 import { seedTemplates } from "./utils/seedTemplates";
 import { CampaignHome } from "./components/CampaignHome";
 import { MemberManager } from "./components/MemberManager";
@@ -49,7 +52,8 @@ interface AppState {
   | "campaign-detail"
   | "campaign-leadgen"
   | "campaign-contacts"
-  | "campaign-template";
+  | "campaign-template"
+  | "tunnel";
   contacts: Contact[];
   template: Template | null;
   attachment: File | null;
@@ -87,6 +91,8 @@ function App() {
   });
 
   const [isLoading, setIsLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [authenticatedUser, setAuthenticatedUser] =
     useState<AuthenticatedUser | null>(null);
@@ -289,15 +295,24 @@ function App() {
     const contactMap = new Map(
       appState.contacts.map((contact) => [contact.id, contact]),
     );
+    const hadAttachment = appState.attachment !== null;
     const enrichedResults: ProcessingResult[] = results.map((result) => {
       const contact = contactMap.get(result.contactId);
+      // If attachment was expected but contact is still "drafted" or "attaching",
+      // mark as failed - the attachment never completed
+      let finalStatus = result.status;
+      let finalError = result.error;
+      if (hadAttachment && (result.status === "drafted" || result.status === "attaching")) {
+        finalStatus = "failed";
+        finalError = "Attachment upload did not complete";
+      }
       return {
         contactId: result.contactId,
         name: contact?.name || "Unknown",
         email: contact?.email || "",
-        status: result.status,
+        status: finalStatus === "completed" || finalStatus === "failed" ? finalStatus : "failed",
         messageId: result.messageId,
-        error: result.error,
+        error: finalError,
       };
     });
 
@@ -397,6 +412,10 @@ function App() {
     }));
   };
 
+  const navigateFromPalette = useCallback((step: string) => {
+    setAppState(prev => ({ ...prev, currentStep: step as AppState['currentStep'] }));
+  }, []);
+
   useEffect(() => {
     if (!appState.isAuthenticated) return;
     if (appState.activeCampaignId) return; // Don't autosave when in campaign mode
@@ -418,6 +437,11 @@ function App() {
     appState.attachment,
     appState.activeCampaignId,
   ]);
+
+  // Splash screen on boot
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />;
+  }
 
   if (isLoading) {
     return (
@@ -454,9 +478,35 @@ function App() {
   const showStepper = linearFlowSteps.includes(appState.currentStep) ||
     (appState.activeCampaignId && ["attachment", "preflight", "processing", "review"].includes(appState.currentStep));
 
+  // Tunnel playground renders full-screen, outside normal layout
+  if (appState.currentStep === "tunnel") {
+    return <TunnelPlayground onBack={backToCampaignHome} />;
+  }
+
   return (
     <div className="h-full bg-slate-900 relative text-slate-100">
       {rendererErrorOverlay}
+
+      {/* Command Palette */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        onNavigate={navigateFromPalette}
+        onCreateCampaign={() => {
+          setAppState(prev => ({ ...prev, currentStep: 'home', activeCampaignId: null }));
+          // CampaignHome will show create form
+        }}
+        onSignOut={() => {
+          if (window.electronAPI?.logout) {
+            window.electronAPI.logout().finally(() => resetApp());
+          } else {
+            resetApp();
+          }
+        }}
+        activeCampaignId={appState.activeCampaignId}
+        onRunCampaign={appState.activeCampaignId ? runCampaign : undefined}
+      />
+
       <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
         <motion.div
@@ -469,6 +519,16 @@ function App() {
             <span className="bg-yellow-500/10 text-yellow-500 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-yellow-500/20">
               <Sparkles className="h-3.5 w-3.5" /> Email Drafter Pro
             </span>
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 hover:border-slate-600 transition-all text-xs text-slate-400 hover:text-slate-200"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              Quick actions
+              <kbd className="ml-1 px-1.5 py-0.5 rounded bg-slate-700 border border-slate-600 text-[10px] font-mono text-slate-400">
+                {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl+'}K
+              </kbd>
+            </button>
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
             Campaign Studio

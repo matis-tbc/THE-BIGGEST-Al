@@ -1,6 +1,15 @@
 import { useEffect, useState, useRef } from "react";
-import { parseCSV, ParsedContact, validateEmail } from "../utils/csvParser";
+import {
+  parseCSV,
+  ParsedContact,
+  validateEmail,
+  isHeaderRow,
+  inferColumnTypes,
+  parseCSVLine,
+} from "../utils/csvParser";
+import type { ColumnInference } from "../utils/csvParser";
 import { projectStore, StoredTemplate } from "../services/projectStore";
+import { ColumnMapper } from "./ColumnMapper";
 
 interface Contact {
   id: string;
@@ -36,6 +45,11 @@ export const ContactImport: React.FC<ContactImportProps> = ({
   const [dragSelectMode, setDragSelectMode] = useState(true);
 
   const [pastedText, setPastedText] = useState("");
+
+  // Column mapper state for headerless paste
+  const [showColumnMapper, setShowColumnMapper] = useState(false);
+  const [inferredColumns, setInferredColumns] = useState<ColumnInference[]>([]);
+  const [rawPastedRows, setRawPastedRows] = useState<string[][]>([]);
 
   useEffect(() => {
     projectStore.listTemplates().then(setTemplates).catch(console.error);
@@ -158,10 +172,32 @@ export const ContactImport: React.FC<ContactImportProps> = ({
 
   const handlePastedTextSubmit = async () => {
     if (!pastedText.trim()) return;
-    setIsLoading(true);
     setError(null);
     setValidationErrors([]);
 
+    // Detect delimiter and split into rows
+    const lines = pastedText.trim().split("\n").filter((l) => l.trim());
+    if (lines.length === 0) return;
+
+    const tabCount = (lines[0].match(/\t/g) || []).length;
+    const commaCount = (lines[0].match(/,/g) || []).length;
+    const delimiter = tabCount > commaCount ? "\t" : ",";
+
+    const firstRowCells = parseCSVLine(lines[0], delimiter);
+
+    // Check if the first row looks like data (not headers)
+    if (!isHeaderRow(firstRowCells)) {
+      // Headerless data: parse all rows and show column mapper
+      const allRows = lines.map((line) => parseCSVLine(line, delimiter));
+      const inferred = inferColumnTypes(allRows);
+      setRawPastedRows(allRows);
+      setInferredColumns(inferred);
+      setShowColumnMapper(true);
+      return;
+    }
+
+    // Has headers: use existing parseCSV flow
+    setIsLoading(true);
     try {
       const parsedContacts = await parseCSV(pastedText);
       await loadParsedContacts(parsedContacts);
@@ -169,6 +205,31 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     } catch (err) {
       console.error("Paste parsing error:", err);
       setError("Failed to parse pasted text. Please check the format.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleColumnMapperConfirm = async (confirmedHeaders: string[]) => {
+    setShowColumnMapper(false);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Build CSV text with synthetic header row + data rows
+      const delimiter = "\t";
+      const headerLine = confirmedHeaders.join(delimiter);
+      const dataLines = rawPastedRows.map((row) => row.join(delimiter));
+      const csvWithHeaders = [headerLine, ...dataLines].join("\n");
+
+      const parsedContacts = await parseCSV(csvWithHeaders);
+      await loadParsedContacts(parsedContacts);
+      setPastedText("");
+      setRawPastedRows([]);
+      setInferredColumns([]);
+    } catch (err) {
+      console.error("Column mapper parsing error:", err);
+      setError("Failed to import contacts. Please check the column mapping.");
     } finally {
       setIsLoading(false);
     }
@@ -479,22 +540,37 @@ export const ContactImport: React.FC<ContactImportProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="text-center text-sm font-medium text-slate-400">OR</div>
-        <textarea
-          className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl p-4 text-sm text-slate-300 focus:border-yellow-500/50 focus:ring focus:ring-yellow-500/20 mb-2 min-h-[120px] resize-y placeholder-slate-600 focus:outline-none transition-all"
-          placeholder="Paste columns from Excel, Google Sheets, or any tab/comma separated text here..."
-          value={pastedText}
-          onChange={(e) => setPastedText(e.target.value)}
-        />
-        <button
-          className="btn-secondary w-full py-3 border-dashed hover:border-solid bg-slate-800/50 hover:bg-slate-800 transition-all font-medium text-slate-300 hover:text-white"
-          onClick={handlePastedTextSubmit}
-          disabled={isLoading || !pastedText.trim()}
-        >
-          {isLoading ? "Processing..." : "Import from Pasted Text"}
-        </button>
-      </div>
+      {showColumnMapper ? (
+        <div className="border border-slate-700 rounded-xl p-4 bg-slate-800/30">
+          <ColumnMapper
+            inferredColumns={inferredColumns}
+            rawRows={rawPastedRows}
+            onConfirm={handleColumnMapperConfirm}
+            onCancel={() => {
+              setShowColumnMapper(false);
+              setRawPastedRows([]);
+              setInferredColumns([]);
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="text-center text-sm font-medium text-slate-400">OR</div>
+          <textarea
+            className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl p-4 text-sm text-slate-300 focus:border-yellow-500/50 focus:ring focus:ring-yellow-500/20 mb-2 min-h-[120px] resize-y placeholder-slate-600 focus:outline-none transition-all"
+            placeholder="Paste columns from Excel, Google Sheets, or any tab/comma separated text here. Headerless data is auto-detected..."
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+          />
+          <button
+            className="btn-secondary w-full py-3 border-dashed hover:border-solid bg-slate-800/50 hover:bg-slate-800 transition-all font-medium text-slate-300 hover:text-white"
+            onClick={handlePastedTextSubmit}
+            disabled={isLoading || !pastedText.trim()}
+          >
+            {isLoading ? "Processing..." : "Import from Pasted Text"}
+          </button>
+        </div>
+      )}
 
       {/* Sample CSV Download */}
       <div className="text-center">

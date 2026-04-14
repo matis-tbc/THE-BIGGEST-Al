@@ -14,6 +14,79 @@ export interface Template {
   variables: string[];
 }
 
+// Canonical variable name mappings for template conversion.
+// Maps lowercase raw variable names to their canonical {{double brace}} form.
+export const VARIABLE_ALIASES: Record<string, string> = {
+  // Sender fields (signature block)
+  "your name": "Sender Name",
+  "my name": "Sender Name",
+  "role": "Sender Role",
+  "major": "Sender Major",
+  "phone number": "Sender Phone",
+  "email": "Sender Email",
+  // Contact fields
+  "name": "First Name",
+  "contact name": "First Name",
+  "first name": "First Name",
+  "contact first name": "First Name",
+  // Company
+  "company name": "Company",
+  "company": "Company",
+};
+
+export interface VariableMapping {
+  original: string;
+  converted: string;
+  isAlias: boolean;
+}
+
+export interface ConvertedTemplate {
+  content: string;
+  mappings: VariableMapping[];
+  originalVariables: string[];
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function convertRawTemplate(rawText: string): ConvertedTemplate {
+  const mappings: VariableMapping[] = [];
+  const originalVariables: string[] = [];
+  const seen = new Set<string>();
+
+  // Match {single brace} variables but NOT {{double brace}} ones
+  const singleBraceRegex = /(?<!\{)\{([A-Za-z][A-Za-z\s]*)\}(?!\})/g;
+  let match;
+
+  while ((match = singleBraceRegex.exec(rawText)) !== null) {
+    const original = match[1].trim();
+    const lowerOriginal = original.toLowerCase();
+    if (seen.has(lowerOriginal)) continue;
+    seen.add(lowerOriginal);
+    originalVariables.push(original);
+
+    const canonical = VARIABLE_ALIASES[lowerOriginal];
+    mappings.push({
+      original,
+      converted: canonical || original,
+      isAlias: !!canonical,
+    });
+  }
+
+  // Replace all {single brace} with {{canonical}} names
+  let converted = rawText;
+  for (const mapping of mappings) {
+    const regex = new RegExp(
+      `(?<!\\{)\\{\\s*${escapeRegex(mapping.original)}\\s*\\}(?!\\})`,
+      "gi",
+    );
+    converted = converted.replace(regex, `{{${mapping.converted}}}`);
+  }
+
+  return { content: converted, mappings, originalVariables };
+}
+
 export function mergeTemplate(template: string, contact: Contact): string {
   let merged = template;
 
@@ -178,20 +251,29 @@ export function validateTemplate(
     }
   });
 
-  // Check for unused contact fields
-  availableFields.forEach((field) => {
-    if (!templateVariables.includes(field)) {
-      warnings.push(`Contact field "${field}" is not used in template`);
-    }
-  });
+  // Check for variables that resolve to empty after merge
+  if (contacts.length > 0) {
+    const sampleContact = contacts[0];
+    templateVariables.forEach((variable) => {
+      const lowerVar = variable.toLowerCase();
+      // Skip variables we know resolve via aliases or derivation
+      const knownAliases = [
+        "first name", "contact first name", "your name", "my name",
+        "contact name", "role", "major", "phone number", "company name",
+        "sender name", "sender role", "sender major", "sender phone", "sender email",
+      ];
+      if (knownAliases.includes(lowerVar)) return;
 
-  // Check for required fields
-  const requiredFields = ["name", "email"];
-  requiredFields.forEach((field) => {
-    if (!templateVariables.includes(field)) {
-      warnings.push(`Consider using "{{${field}}}" in your template`);
-    }
-  });
+      const directKey = Object.keys(sampleContact).find(
+        (k) => k.toLowerCase() === lowerVar,
+      );
+      if (directKey && !sampleContact[directKey]) {
+        warnings.push(
+          `"{{${variable}}}" is empty for ${sampleContact.name || sampleContact.email}`,
+        );
+      }
+    });
+  }
 
   return {
     isValid: errors.length === 0,

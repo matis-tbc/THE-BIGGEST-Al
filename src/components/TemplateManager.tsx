@@ -6,7 +6,9 @@ import {
   validateTemplate,
   DEFAULT_SUBJECTS,
   formatEmailBodyHtml,
+  convertRawTemplate,
 } from "../utils/templateMerge";
+import type { ConvertedTemplate } from "../utils/templateMerge";
 import { projectStore, StoredTemplate } from "../services/projectStore";
 import { EnhancedTemplateEditor } from "./EnhancedTemplateEditor";
 
@@ -44,6 +46,12 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Paste Template state
+  const [showPasteImport, setShowPasteImport] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [convertedResult, setConvertedResult] = useState<ConvertedTemplate | null>(null);
+  const [pasteTemplateName, setPasteTemplateName] = useState("");
 
   const availableVariables = useMemo(() => {
     const variables = new Set<string>();
@@ -293,6 +301,169 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Paste Template Import */}
+      <div className="border border-slate-700 rounded-xl bg-slate-800/30 overflow-hidden">
+        <button
+          onClick={() => {
+            setShowPasteImport(!showPasteImport);
+            if (showPasteImport) {
+              setPasteText("");
+              setConvertedResult(null);
+              setPasteTemplateName("");
+            }
+          }}
+          className="w-full flex items-center justify-between p-4 hover:bg-slate-700/30 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+            <span className="text-sm font-medium text-slate-200">Paste Template Text</span>
+            <span className="text-xs text-slate-500">Auto-converts {"{"} variables {"}"} to {"{{"}variables{"}}"}</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-slate-400 transition-transform ${showPasteImport ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        {showPasteImport && (
+          <div className="border-t border-slate-700 p-4 space-y-4">
+            {!convertedResult ? (
+              <>
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste your raw template text here. Variables like {Name}, {Your Name}, {Company Name} will be auto-converted..."
+                  className="w-full bg-slate-900/50 border border-slate-700 rounded-lg p-4 text-sm text-slate-200 font-mono placeholder-slate-600 focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 resize-y"
+                  rows={10}
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      if (!pasteText.trim()) return;
+                      const result = convertRawTemplate(pasteText);
+                      setConvertedResult(result);
+                      // Auto-suggest name from first line or subject
+                      const parsed = parseTemplateSections(result.content);
+                      if (parsed.subject) {
+                        setPasteTemplateName(parsed.subject.replace(/\{\{[^}]+\}\}/g, "").trim().replace(/\s+/g, " ").trim() || "");
+                      }
+                    }}
+                    disabled={!pasteText.trim()}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    Convert Variables
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Variable Mapping Table */}
+                {convertedResult.mappings.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-300 mb-2">Variable Mappings</h4>
+                    <div className="bg-slate-900/50 border border-slate-700 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-700">
+                            <th className="text-left p-2 text-slate-400 font-medium">Original</th>
+                            <th className="text-center p-2 text-slate-500">-&gt;</th>
+                            <th className="text-left p-2 text-slate-400 font-medium">Converted</th>
+                            <th className="text-right p-2 text-slate-400 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {convertedResult.mappings.map((m, i) => (
+                            <tr key={i} className="border-b border-slate-800 last:border-0">
+                              <td className="p-2 text-slate-300 font-mono">{`{${m.original}}`}</td>
+                              <td className="p-2 text-center text-slate-600">-&gt;</td>
+                              <td className="p-2 text-yellow-400 font-mono">{`{{${m.converted}}}`}</td>
+                              <td className="p-2 text-right">
+                                {m.isAlias ? (
+                                  <span className="text-xs text-emerald-400">auto-mapped</span>
+                                ) : (
+                                  <span className="text-xs text-slate-500">kept as-is</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Converted Preview */}
+                <div>
+                  <h4 className="text-sm font-medium text-slate-300 mb-2">Converted Template</h4>
+                  <pre className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 text-sm text-slate-300 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
+                    {convertedResult.content}
+                  </pre>
+                </div>
+
+                {/* Template Name */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Template Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={pasteTemplateName}
+                    onChange={(e) => setPasteTemplateName(e.target.value)}
+                    placeholder="e.g., Zayo Group, General - Reliable Systems"
+                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-between">
+                  <button
+                    onClick={() => {
+                      setConvertedResult(null);
+                    }}
+                    className="btn-secondary text-sm"
+                  >
+                    Back to Edit
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!pasteTemplateName.trim() || !convertedResult) return;
+                      setIsLoading(true);
+                      try {
+                        const variables = extractVariables(convertedResult.content);
+                        const template: StoredTemplate = {
+                          id: `template-${Date.now()}`,
+                          name: pasteTemplateName.trim(),
+                          subjects: DEFAULT_SUBJECTS,
+                          content: convertedResult.content,
+                          variables,
+                          createdAt: new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                          versions: [],
+                        };
+                        await projectStore.saveTemplate(template);
+                        await refreshTemplates();
+                        setSelectedTemplate(template);
+                        // Reset paste state
+                        setShowPasteImport(false);
+                        setPasteText("");
+                        setConvertedResult(null);
+                        setPasteTemplateName("");
+                      } catch (err) {
+                        console.error("Failed to save pasted template:", err);
+                        setError("Failed to save template.");
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={!pasteTemplateName.trim() || isLoading}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    {isLoading ? "Saving..." : "Save Template"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Available Variables */}

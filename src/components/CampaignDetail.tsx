@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Building2, Users, FileText, History, Play,
   Copy, Check, Trash2, Archive, Edit2, X
@@ -120,7 +120,8 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
   };
 
   const validContactCount = campaign.contacts.filter(c => validateEmail(c.email)).length;
-  const canRun = validContactCount > 0 && campaign.templateId;
+  const allContactsHaveTemplate = campaign.contacts.length > 0 && campaign.contacts.every(c => c.templateId);
+  const canRun = validContactCount > 0 && (campaign.templateId || allContactsHaveTemplate);
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: 'companies', label: 'Companies', icon: <Building2 className="h-4 w-4" />, count: campaign.companies.length },
@@ -237,7 +238,15 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
       </div>
 
       {/* Tab Content */}
-      <div className="min-h-[300px]">
+      <AnimatePresence mode="wait">
+      <motion.div
+        key={activeTab}
+        className="min-h-[300px]"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.15 }}
+      >
         {/* Companies Tab */}
         {activeTab === 'companies' && (
           <div className="space-y-4">
@@ -457,7 +466,8 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
             )}
           </div>
         )}
-      </div>
+      </motion.div>
+      </AnimatePresence>
 
       {/* Sticky Action Bar */}
       <div className="sticky bottom-0 bg-slate-900/95 backdrop-blur border-t border-slate-700 -mx-6 -mb-6 px-6 py-4 flex items-center justify-between">

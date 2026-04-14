@@ -623,6 +623,24 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
                     </div>
                   ))}
                 </div>
+
+                {/* Distribution pattern hint */}
+                {visualSubjects.length > 1 && (
+                  <div className="bg-slate-900/50 rounded-lg px-3 py-2 mt-1">
+                    <p className="text-xs text-slate-500">
+                      Subjects alternate evenly: Contact #1 gets Subject 01, #2 gets Subject 02, etc.
+                      {contacts.length > 0 && (
+                        <span className="text-slate-400 ml-1">
+                          With {contacts.length} contacts:{" "}
+                          {visualSubjects.map((_, i) => {
+                            const count = Math.floor(contacts.length / visualSubjects.length) + (i < contacts.length % visualSubjects.length ? 1 : 0);
+                            return `Subject ${(i + 1).toString().padStart(2, "0")} = ${count}`;
+                          }).join(", ")}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center">

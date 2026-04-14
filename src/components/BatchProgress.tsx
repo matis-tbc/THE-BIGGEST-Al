@@ -95,7 +95,10 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
       setOperationId(opId);
       setIsProcessing(false);
 
-      onComplete(opId, latestResults.length > 0 ? latestResults : statuses);
+      // Final progress update so the user sees the completed state
+      if (latestResults.length > 0) {
+        setStatuses([...latestResults]);
+      }
     } catch (err) {
       console.error("Processing error:", err);
       setError(
