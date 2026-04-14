@@ -383,7 +383,8 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
                 }
               }}
               onPaste={(e) => {
-                // Immediate convert on paste for instant feedback
+                // Immediate convert on paste, cancel any pending debounce
+                if (convertTimerRef.current) clearTimeout(convertTimerRef.current);
                 const pasted = e.clipboardData.getData("text");
                 if (pasted.trim()) {
                   setTimeout(() => {

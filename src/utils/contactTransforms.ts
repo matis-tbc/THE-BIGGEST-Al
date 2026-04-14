@@ -12,7 +12,9 @@ export function trimAllFields(contacts: Contact[]): Contact[] {
   return contacts.map((contact) => {
     const updated: Contact = { ...contact };
     Object.keys(updated).forEach((key) => {
-      updated[key] = (updated[key] || "").trim();
+      if (key === "id" || key === "templateId") return; // preserve null/undefined
+      const val = updated[key];
+      if (typeof val === "string") updated[key] = val.trim();
     });
     return updated;
   });

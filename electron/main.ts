@@ -6,7 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const { AuthService } = require('./auth');
 const { CompanyGeneratorService } = require('./companyGeneratorService');
-const { guessEmail, guessEmailBatch, backtestPatterns, parseLinkedInUrl, detectDomainPattern, inferDomainCandidates } = require('../src/utils/emailPatterns');
+const { guessEmail, guessEmailBatch, backtestPatterns, parseLinkedInUrl, detectDomainPattern, inferDomainCandidates } = require('./emailPatterns');
 const { verifyMx } = require('./emailPatternService');
 
 const isDev = process.env.NODE_ENV === 'development';

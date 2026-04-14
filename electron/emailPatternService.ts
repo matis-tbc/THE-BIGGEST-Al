@@ -8,7 +8,7 @@ export {
   guessEmailBatch,
   backtestPatterns,
   parseLinkedInUrl,
-} from "../src/utils/emailPatterns";
+} from "./emailPatterns";
 
 export interface MxResult {
   valid: boolean;

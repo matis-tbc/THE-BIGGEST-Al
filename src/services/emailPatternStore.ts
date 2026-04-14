@@ -23,20 +23,29 @@ interface PatternStore {
 
 const STORAGE_KEY = "email-drafter.patterns.v1";
 
+// In-memory cache to avoid re-parsing localStorage on every call
+let _cache: PatternStore | null = null;
+
 function load(): PatternStore {
+  if (_cache) return _cache;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      _cache = JSON.parse(raw);
+      return _cache!;
+    }
   } catch {
     // corrupted data, reset
   }
-  return { patterns: [], domains: [] };
+  _cache = { patterns: [], domains: [] };
+  return _cache;
 }
 
 const MAX_PATTERNS = 500;
 const MAX_DOMAINS = 500;
 
 function save(store: PatternStore): void {
+  _cache = store; // update in-memory cache
   // Evict oldest entries if over capacity
   if (store.patterns.length > MAX_PATTERNS) {
     store.patterns.sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated));

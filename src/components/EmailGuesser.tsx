@@ -69,27 +69,34 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
   const resolveCompanyDomains = async () => {
     if (!companies?.length || !window.electronAPI?.emailResolveDomain) return;
     setIsResolvingDomains(true);
-    const results = new Map<string, string | null>();
-    for (const company of companies) {
-      // Skip if we already know this domain from contacts
-      const knownDomain = knownContacts.find((c) => {
-        const contactCompany = (c as any).Company || (c as any).company;
-        return contactCompany?.toLowerCase() === company.name.toLowerCase();
-      });
-      if (knownDomain) {
-        results.set(company.name, knownDomain.email.split("@")[1]);
-        continue;
+    try {
+      const results = new Map<string, string | null>();
+      for (const company of companies) {
+        const knownDomain = knownContacts.find((c) => {
+          const contactCompany = (c as any).Company || (c as any).company;
+          return contactCompany?.toLowerCase() === company.name.toLowerCase();
+        });
+        if (knownDomain) {
+          results.set(company.name, knownDomain.email.split("@")[1]);
+          continue;
+        }
+        try {
+          const result = await window.electronAPI.emailResolveDomain(company.name);
+          results.set(company.name, result.domain);
+        } catch {
+          results.set(company.name, null);
+        }
       }
-      const result = await window.electronAPI.emailResolveDomain(company.name);
-      results.set(company.name, result.domain);
+      setResolvedDomains(results);
+      const resolved = [...results.entries()].filter(([, d]) => d);
+      if (resolved.length === 1 && !linkedInDomain) {
+        setLinkedInDomain(resolved[0][1]!);
+      }
+    } catch (err) {
+      console.error("Domain resolution failed:", err);
+    } finally {
+      setIsResolvingDomains(false);
     }
-    setResolvedDomains(results);
-    // Auto-populate LinkedIn domain if only one company resolved
-    const resolved = [...results.entries()].filter(([, d]) => d);
-    if (resolved.length === 1 && !linkedInDomain) {
-      setLinkedInDomain(resolved[0][1]!);
-    }
-    setIsResolvingDomains(false);
   };
 
   const [mxValid, setMxValid] = useState<boolean | null>(null);
