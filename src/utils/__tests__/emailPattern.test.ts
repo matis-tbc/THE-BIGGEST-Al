@@ -1,121 +1,16 @@
 import { describe, it, expect } from "vitest";
+import {
+  normalizeName,
+  splitName,
+  detectPattern,
+  detectDomainPattern,
+  guessEmail,
+  guessEmailBatch,
+  backtestPatterns,
+  parseLinkedInUrl,
+} from "../emailPatterns";
 
-// Since emailPatternService.ts is in electron/ (Node.js main process),
-// we test the pure logic by importing the functions directly.
-// The dns module won't be available in vitest, so we skip MX tests.
-
-// Inline the pure functions for testing (they don't depend on electron/dns)
-function normalizeName(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z]/g, "");
-}
-
-function splitName(fullName: string): { first: string; last: string } {
-  const parts = fullName.trim().split(/\s+/);
-  const first = normalizeName(parts[0] || "");
-  const last = normalizeName(parts[parts.length - 1] || "");
-  return { first, last };
-}
-
-const PATTERNS = [
-  { id: "first.last", generate: (f: string, l: string) => `${f}.${l}` },
-  { id: "first", generate: (f: string, _l: string) => f },
-  { id: "f.last", generate: (f: string, l: string) => `${f[0]}.${l}` },
-  { id: "first_last", generate: (f: string, l: string) => `${f}_${l}` },
-  { id: "flast", generate: (f: string, l: string) => `${f[0]}${l}` },
-  { id: "firstlast", generate: (f: string, l: string) => `${f}${l}` },
-  { id: "last.first", generate: (f: string, l: string) => `${l}.${f}` },
-  { id: "firstl", generate: (f: string, l: string) => `${f}${l[0]}` },
-];
-
-function detectPattern(
-  email: string,
-  firstName: string,
-  lastName: string,
-): string | null {
-  const localPart = email.split("@")[0].toLowerCase();
-  const first = normalizeName(firstName);
-  const last = normalizeName(lastName);
-  if (!first || !last) return null;
-  for (const pattern of PATTERNS) {
-    if (localPart === pattern.generate(first, last)) return pattern.id;
-  }
-  return null;
-}
-
-function detectDomainPattern(
-  contacts: { name: string; email: string }[],
-): { patternId: string; confidence: number } | null {
-  const counts = new Map<string, number>();
-  for (const c of contacts) {
-    const { first, last } = splitName(c.name);
-    const p = detectPattern(c.email, first, last);
-    if (p) counts.set(p, (counts.get(p) || 0) + 1);
-  }
-  if (counts.size === 0) return null;
-  let best = "";
-  let bestCount = 0;
-  for (const [p, c] of counts) {
-    if (c > bestCount) {
-      best = p;
-      bestCount = c;
-    }
-  }
-  return { patternId: best, confidence: bestCount / contacts.length };
-}
-
-function guessEmail(
-  fullName: string,
-  domain: string,
-  knownContacts: { name: string; email: string }[],
-): { email: string; confidence: number; source: string }[] {
-  const { first, last } = splitName(fullName);
-  if (!first || !last) return [];
-  const domainContacts = knownContacts.filter(
-    (c) => c.email.split("@")[1]?.toLowerCase() === domain.toLowerCase(),
-  );
-  if (domainContacts.length > 0) {
-    const match = detectDomainPattern(domainContacts);
-    if (match) {
-      const pat = PATTERNS.find((p) => p.id === match.patternId);
-      if (pat)
-        return [
-          {
-            email: `${pat.generate(first, last)}@${domain}`,
-            confidence: match.confidence,
-            source: "known_pattern",
-          },
-        ];
-    }
-  }
-  return PATTERNS.slice(0, 3).map((p, i) => ({
-    email: `${p.generate(first, last)}@${domain}`,
-    confidence: 0.4 - i * 0.1,
-    source: "ranked_guess",
-  }));
-}
-
-function parseLinkedInUrl(
-  url: string,
-): { firstName: string; lastName: string } | null {
-  const match = url.match(/linkedin\.com\/in\/([a-z0-9-]+)/i);
-  if (!match) return null;
-  const slug = match[1];
-  const cleaned = slug.replace(/-[a-f0-9]{6,}$/i, "").replace(/-\d+$/, "");
-  const parts = cleaned.split("-").filter((p) => p.length > 0);
-  if (parts.length < 2) return null;
-  return {
-    firstName: parts[0].charAt(0).toUpperCase() + parts[0].slice(1),
-    lastName:
-      parts[parts.length - 1].charAt(0).toUpperCase() +
-      parts[parts.length - 1].slice(1),
-  };
-}
-
-// Test data from the actual project - real contacts used in this session
+// Real contacts from this project session
 const DIGIKEY_CONTACTS = [
   { name: "Kiersten jenson", email: "kierstin.jenson@digikey.com" },
   { name: "Cameron Cloyd", email: "cameron.cloyd@digikey.com" },
@@ -132,11 +27,6 @@ const ZAYO_CONTACTS = [
   { name: "Bruce Bamford", email: "bruce.bamford@zayo.com" },
 ];
 
-const INTEL_CONTACTS = [
-  { name: "Vivek Roy", email: "vivek.r@intel.com" },
-  { name: "Scott Foley", email: "scott.n.foley@intel.com" },
-];
-
 const RTX_CONTACTS = [
   { name: "Jackie Rybacki", email: "jackie.rybacki@rtx.com" },
   { name: "Stephen Hamilton", email: "stephen.hamilton@rtx.com" },
@@ -144,22 +34,113 @@ const RTX_CONTACTS = [
   { name: "Craig Pierce", email: "craig.pierce@rtx.com" },
 ];
 
+const SHELL_CONTACTS = [
+  { name: "Neil Touati", email: "neil.touati@shell.com" },
+  { name: "Harry Girsang", email: "harry.girsang@shell.com" },
+  { name: "Wai Yiu", email: "wai.yiu@shell.com" },
+];
+
+describe("normalizeName", () => {
+  it("lowercases and strips non-alpha", () => {
+    expect(normalizeName("John")).toBe("john");
+  });
+
+  it("strips accents", () => {
+    expect(normalizeName("Rene")).toBe("rene");
+    expect(normalizeName("Juergen")).toBe("juergen");
+  });
+
+  it("handles apostrophes", () => {
+    expect(normalizeName("O'Grady")).toBe("ogrady");
+  });
+
+  it("handles hyphens", () => {
+    expect(normalizeName("Mary-Jane")).toBe("maryjane");
+  });
+});
+
+describe("splitName", () => {
+  it("splits first and last", () => {
+    expect(splitName("John Smith")).toEqual({ first: "john", last: "smith" });
+  });
+
+  it("handles single name", () => {
+    const result = splitName("Alexia");
+    expect(result.first).toBe("alexia");
+    expect(result.last).toBe("alexia");
+  });
+
+  it("strips suffixes", () => {
+    expect(splitName("Robert Jones Jr.")).toEqual({
+      first: "robert",
+      last: "jones",
+    });
+    expect(splitName("William III")).toEqual({
+      first: "william",
+      last: "william",
+    });
+  });
+
+  it("handles extra whitespace", () => {
+    expect(splitName("  John   Smith  ")).toEqual({
+      first: "john",
+      last: "smith",
+    });
+  });
+
+  it("handles three-part names", () => {
+    expect(splitName("Mary Jane Watson")).toEqual({
+      first: "mary",
+      last: "watson",
+    });
+  });
+});
+
 describe("detectPattern", () => {
-  it("detects firstname.lastname pattern", () => {
+  it("detects firstname.lastname", () => {
     expect(detectPattern("cameron.cloyd@digikey.com", "Cameron", "Cloyd")).toBe(
       "first.last",
     );
   });
 
-  it("detects firstname.lastname for Raytheon", () => {
-    expect(
-      detectPattern("jackie.rybacki@rtx.com", "Jackie", "Rybacki"),
-    ).toBe("first.last");
+  it("detects flastname", () => {
+    expect(detectPattern("jsmith@acme.com", "John", "Smith")).toBe("flast");
   });
 
-  it("returns null for non-matching patterns", () => {
-    // Intel uses non-standard patterns
+  it("detects firstname only", () => {
+    expect(detectPattern("john@acme.com", "John", "Smith")).toBe("first");
+  });
+
+  it("detects firstname_lastname", () => {
+    expect(detectPattern("john_smith@acme.com", "John", "Smith")).toBe(
+      "first_last",
+    );
+  });
+
+  it("detects lastname.firstname", () => {
+    expect(detectPattern("smith.john@acme.com", "John", "Smith")).toBe(
+      "last.first",
+    );
+  });
+
+  it("detects firstnamel", () => {
+    expect(detectPattern("johns@acme.com", "John", "Smith")).toBe("firstl");
+  });
+
+  it("detects first.middle.last with middle initial", () => {
+    expect(
+      detectPattern("scott.n.foley@intel.com", "Scott", "Foley", "n"),
+    ).toBe("first.m.last");
+  });
+
+  it("returns null for unrecognized patterns", () => {
     expect(detectPattern("vivek.r@intel.com", "Vivek", "Roy")).toBe(null);
+  });
+
+  it("handles accented names", () => {
+    expect(
+      detectPattern("rene.dupont@company.com", "Rene", "Dupont"),
+    ).toBe("first.last");
   });
 });
 
@@ -171,120 +152,170 @@ describe("detectDomainPattern", () => {
     expect(result!.confidence).toBeGreaterThan(0.8);
   });
 
-  it("detects first.last for Zayo", () => {
+  it("detects first.last for Zayo with 100% confidence", () => {
     const result = detectDomainPattern(ZAYO_CONTACTS);
     expect(result).not.toBeNull();
     expect(result!.patternId).toBe("first.last");
     expect(result!.confidence).toBe(1);
   });
 
-  it("detects first.last for Raytheon/RTX", () => {
+  it("detects first.last for RTX", () => {
     const result = detectDomainPattern(RTX_CONTACTS);
-    expect(result).not.toBeNull();
     expect(result!.patternId).toBe("first.last");
+  });
+
+  it("detects first.last for Shell", () => {
+    const result = detectDomainPattern(SHELL_CONTACTS);
+    expect(result!.patternId).toBe("first.last");
+    expect(result!.confidence).toBe(1);
+  });
+
+  it("returns null for empty list", () => {
+    expect(detectDomainPattern([])).toBeNull();
+  });
+
+  it("returns null when no patterns match", () => {
+    const weird = [
+      { name: "John Smith", email: "xyz123@test.com" },
+      { name: "Jane Doe", email: "abc456@test.com" },
+    ];
+    expect(detectDomainPattern(weird)).toBeNull();
   });
 });
 
 describe("guessEmail", () => {
-  it("guesses Digikey email correctly from known pattern", () => {
-    const guesses = guessEmail(
-      "Shawn Luke",
-      "digikey.com",
-      DIGIKEY_CONTACTS,
-    );
-    expect(guesses).toHaveLength(1);
+  it("guesses from known pattern at domain", () => {
+    const guesses = guessEmail("Shawn Luke", "digikey.com", DIGIKEY_CONTACTS);
     expect(guesses[0].email).toBe("shawn.luke@digikey.com");
     expect(guesses[0].source).toBe("known_pattern");
     expect(guesses[0].confidence).toBeGreaterThan(0.8);
   });
 
-  it("guesses Zayo email correctly", () => {
+  it("guesses Zayo email", () => {
     const guesses = guessEmail("Daniel Felshin", "zayo.com", ZAYO_CONTACTS);
     expect(guesses[0].email).toBe("daniel.felshin@zayo.com");
-    expect(guesses[0].source).toBe("known_pattern");
+    expect(guesses[0].confidence).toBe(1);
   });
 
   it("returns ranked guesses for unknown domain", () => {
     const guesses = guessEmail("John Smith", "unknown-corp.com", []);
-    expect(guesses).toHaveLength(3);
+    expect(guesses.length).toBe(3);
     expect(guesses[0].email).toBe("john.smith@unknown-corp.com");
     expect(guesses[0].source).toBe("ranked_guess");
     expect(guesses[1].email).toBe("john@unknown-corp.com");
     expect(guesses[2].email).toBe("j.smith@unknown-corp.com");
   });
+
+  it("returns fallback when confidence < 100%", () => {
+    // Digikey has one mismatch (Kiersten), so confidence < 1.0
+    const guesses = guessEmail("Test User", "digikey.com", DIGIKEY_CONTACTS);
+    expect(guesses.length).toBe(2); // primary + fallback
+  });
+
+  it("handles single-word name", () => {
+    const guesses = guessEmail("Alexia", "digikey.com", DIGIKEY_CONTACTS);
+    // Single name -> first=alexia, last=alexia -> "alexia.alexia@digikey.com"
+    expect(guesses.length).toBeGreaterThan(0);
+  });
+
+  it("normalizes domain to lowercase", () => {
+    const guesses = guessEmail("John Smith", "DIGIKEY.COM", DIGIKEY_CONTACTS);
+    expect(guesses[0].email).toContain("@digikey.com");
+  });
+});
+
+describe("guessEmailBatch", () => {
+  it("processes multiple contacts at once", () => {
+    const results = guessEmailBatch(
+      [{ name: "Shawn Luke" }, { name: "Jeffrey Lacey" }],
+      "digikey.com",
+      DIGIKEY_CONTACTS,
+    );
+    expect(results).toHaveLength(2);
+    expect(results[0].guesses[0].email).toBe("shawn.luke@digikey.com");
+    expect(results[1].guesses[0].email).toBe("jeffrey.lacey@digikey.com");
+  });
 });
 
 describe("backtesting (leave-one-out)", () => {
-  it("achieves high accuracy on Digikey contacts", () => {
+  it("achieves high accuracy on Digikey", () => {
     let correct = 0;
     for (let i = 0; i < DIGIKEY_CONTACTS.length; i++) {
       const test = DIGIKEY_CONTACTS[i];
       const training = DIGIKEY_CONTACTS.filter((_, j) => j !== i);
       const guesses = guessEmail(test.name, "digikey.com", training);
-      if (
-        guesses.length > 0 &&
-        guesses[0].email.toLowerCase() === test.email.toLowerCase()
-      ) {
+      if (guesses[0]?.email.toLowerCase() === test.email.toLowerCase()) {
         correct++;
       }
     }
-    // Kiersten has a typo (kierstin vs kiersten) so it might miss that one
     expect(correct).toBeGreaterThanOrEqual(DIGIKEY_CONTACTS.length - 1);
   });
 
-  it("achieves 100% on Zayo contacts", () => {
+  it("achieves 100% on Zayo", () => {
     let correct = 0;
     for (let i = 0; i < ZAYO_CONTACTS.length; i++) {
       const test = ZAYO_CONTACTS[i];
       const training = ZAYO_CONTACTS.filter((_, j) => j !== i);
       const guesses = guessEmail(test.name, "zayo.com", training);
-      if (
-        guesses.length > 0 &&
-        guesses[0].email.toLowerCase() === test.email.toLowerCase()
-      ) {
+      if (guesses[0]?.email.toLowerCase() === test.email.toLowerCase()) {
         correct++;
       }
     }
     expect(correct).toBe(ZAYO_CONTACTS.length);
   });
 
-  it("achieves 100% on RTX contacts", () => {
+  it("achieves 100% on RTX", () => {
     let correct = 0;
     for (let i = 0; i < RTX_CONTACTS.length; i++) {
       const test = RTX_CONTACTS[i];
       const training = RTX_CONTACTS.filter((_, j) => j !== i);
       const guesses = guessEmail(test.name, "rtx.com", training);
-      if (
-        guesses.length > 0 &&
-        guesses[0].email.toLowerCase() === test.email.toLowerCase()
-      ) {
+      if (guesses[0]?.email.toLowerCase() === test.email.toLowerCase()) {
         correct++;
       }
     }
     expect(correct).toBe(RTX_CONTACTS.length);
   });
+
+  it("backtestPatterns returns structured results", () => {
+    const all = [...DIGIKEY_CONTACTS, ...ZAYO_CONTACTS, ...RTX_CONTACTS, ...SHELL_CONTACTS];
+    const result = backtestPatterns(all);
+    expect(result.totalContacts).toBe(all.length);
+    expect(result.testableContacts).toBeGreaterThan(0);
+    expect(result.accuracy).toBeGreaterThan(0.8);
+    expect(result.perDomain.length).toBe(4);
+    expect(result.perDomain[0].domain).toBeDefined();
+    expect(result.perDomain[0].pattern).toBeDefined();
+  });
+
+  it("skips domains with only 1 contact", () => {
+    const contacts = [
+      { name: "Solo Person", email: "solo@unique.com" },
+      ...ZAYO_CONTACTS,
+    ];
+    const result = backtestPatterns(contacts);
+    // unique.com should not appear in perDomain
+    expect(result.perDomain.find((d) => d.domain === "unique.com")).toBeUndefined();
+  });
 });
 
 describe("parseLinkedInUrl", () => {
   it("extracts name from standard URL", () => {
-    const result = parseLinkedInUrl(
-      "https://www.linkedin.com/in/john-smith-a1b2c3d4",
-    );
-    expect(result).toEqual({ firstName: "John", lastName: "Smith" });
+    expect(
+      parseLinkedInUrl("https://www.linkedin.com/in/john-smith-a1b2c3d4"),
+    ).toEqual({ firstName: "John", lastName: "Smith" });
   });
 
-  it("extracts name from URL without hash suffix", () => {
-    const result = parseLinkedInUrl(
-      "https://linkedin.com/in/ashley-menezes",
-    );
-    expect(result).toEqual({ firstName: "Ashley", lastName: "Menezes" });
+  it("extracts name without hash suffix", () => {
+    expect(
+      parseLinkedInUrl("https://linkedin.com/in/ashley-menezes"),
+    ).toEqual({ firstName: "Ashley", lastName: "Menezes" });
   });
 
-  it("handles multi-part names (takes first and last)", () => {
-    const result = parseLinkedInUrl(
-      "https://linkedin.com/in/mary-jane-watson-abc123",
-    );
-    expect(result).toEqual({ firstName: "Mary", lastName: "Watson" });
+  it("handles multi-part names (first and last)", () => {
+    expect(
+      parseLinkedInUrl("https://linkedin.com/in/mary-jane-watson-abc123"),
+    ).toEqual({ firstName: "Mary", lastName: "Watson" });
   });
 
   it("returns null for non-LinkedIn URLs", () => {
@@ -292,15 +323,38 @@ describe("parseLinkedInUrl", () => {
   });
 
   it("returns null for company pages", () => {
-    expect(
-      parseLinkedInUrl("https://linkedin.com/company/digikey"),
-    ).toBeNull();
+    expect(parseLinkedInUrl("https://linkedin.com/company/digikey")).toBeNull();
   });
 
-  it("handles numeric suffix removal", () => {
-    const result = parseLinkedInUrl(
-      "https://linkedin.com/in/craig-pierce-12345",
-    );
-    expect(result).toEqual({ firstName: "Craig", lastName: "Pierce" });
+  it("handles numeric suffix", () => {
+    expect(
+      parseLinkedInUrl("https://linkedin.com/in/craig-pierce-12345"),
+    ).toEqual({ firstName: "Craig", lastName: "Pierce" });
+  });
+
+  it("strips query parameters", () => {
+    expect(
+      parseLinkedInUrl(
+        "https://linkedin.com/in/john-smith?trk=public_profile",
+      ),
+    ).toEqual({ firstName: "John", lastName: "Smith" });
+  });
+
+  it("strips trailing slashes", () => {
+    expect(
+      parseLinkedInUrl("https://linkedin.com/in/john-smith/"),
+    ).toEqual({ firstName: "John", lastName: "Smith" });
+  });
+
+  it("handles URL with both query params and trailing slash", () => {
+    expect(
+      parseLinkedInUrl(
+        "https://www.linkedin.com/in/bruce-bamford-abc123/?locale=en_US",
+      ),
+    ).toEqual({ firstName: "Bruce", lastName: "Bamford" });
+  });
+
+  it("returns null for single-name slugs", () => {
+    expect(parseLinkedInUrl("https://linkedin.com/in/madonna")).toBeNull();
   });
 });

@@ -6,7 +6,8 @@ const http = require('http');
 const fs = require('fs');
 const { AuthService } = require('./auth');
 const { CompanyGeneratorService } = require('./companyGeneratorService');
-const { guessEmail, backtestPatterns, verifyMx, parseLinkedInUrl, detectDomainPattern } = require('./emailPatternService');
+const { guessEmail, guessEmailBatch, backtestPatterns, parseLinkedInUrl, detectDomainPattern } = require('../src/utils/emailPatterns');
+const { verifyMx } = require('./emailPatternService');
 
 const isDev = process.env.NODE_ENV === 'development';
 const OAUTH_PORT = 3000;

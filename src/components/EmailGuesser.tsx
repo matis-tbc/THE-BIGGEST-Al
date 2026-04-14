@@ -1,31 +1,11 @@
 import React, { useState, useMemo } from "react";
+import type { EmailGuess, BacktestResult } from "../utils/emailPatterns";
 
 interface Contact {
   id: string;
   name: string;
   email: string;
   [key: string]: string | null | undefined;
-}
-
-interface EmailGuess {
-  email: string;
-  patternId: string;
-  patternLabel: string;
-  confidence: number;
-  source: "known_pattern" | "ranked_guess";
-}
-
-interface BacktestResult {
-  totalContacts: number;
-  testableContacts: number;
-  correctGuesses: number;
-  accuracy: number;
-  perDomain: {
-    domain: string;
-    pattern: string;
-    contacts: number;
-    accuracy: number;
-  }[];
 }
 
 interface EmailGuesserProps {
@@ -88,11 +68,25 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
     );
   };
 
+  const [mxValid, setMxValid] = useState<boolean | null>(null);
+
   const processLinkedInUrls = async () => {
     if (!linkedInDomain.trim() || !linkedInUrls.trim()) return;
     if (!window.electronAPI?.emailParseLinkedin || !window.electronAPI?.emailGuess) return;
 
     setIsProcessingUrls(true);
+    setMxValid(null);
+
+    // Verify MX first
+    if (window.electronAPI.emailVerifyMx) {
+      const mx = await window.electronAPI.emailVerifyMx(linkedInDomain.trim());
+      setMxValid(mx.valid);
+      if (!mx.valid) {
+        setIsProcessingUrls(false);
+        return;
+      }
+    }
+
     const urls = linkedInUrls
       .trim()
       .split("\n")
@@ -231,13 +225,17 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
         </p>
 
         <div className="space-y-2">
-          <input
-            type="text"
-            value={linkedInDomain}
-            onChange={(e) => setLinkedInDomain(e.target.value)}
-            placeholder="Company email domain (e.g., digikey.com)"
-            className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={linkedInDomain}
+              onChange={(e) => { setLinkedInDomain(e.target.value); setMxValid(null); }}
+              placeholder="Company email domain (e.g., digikey.com)"
+              className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500"
+            />
+            {mxValid === true && <span className="text-xs text-emerald-400 flex-shrink-0">MX valid</span>}
+            {mxValid === false && <span className="text-xs text-rose-400 flex-shrink-0">Invalid domain</span>}
+          </div>
           <textarea
             value={linkedInUrls}
             onChange={(e) => setLinkedInUrls(e.target.value)}
