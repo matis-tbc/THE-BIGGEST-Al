@@ -6,6 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const { AuthService } = require('./auth');
 const { CompanyGeneratorService } = require('./companyGeneratorService');
+const { guessEmail, backtestPatterns, verifyMx, parseLinkedInUrl, detectDomainPattern } = require('./emailPatternService');
 
 const isDev = process.env.NODE_ENV === 'development';
 const OAUTH_PORT = 3000;
@@ -263,6 +264,52 @@ ipcMain.handle('company:search', async (_: any, query: string, filters?: { indus
   } catch (error) {
     console.error('Company search error:', error);
     throw error;
+  }
+});
+
+// Email pattern guesser IPC handlers
+ipcMain.handle('email:guess', async (_: any, fullName: string, domain: string, knownContacts: { name: string; email: string }[]) => {
+  try {
+    return guessEmail(fullName, domain, knownContacts);
+  } catch (error) {
+    console.error('Email guess error:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('email:backtest', async (_: any, contacts: { name: string; email: string }[]) => {
+  try {
+    return backtestPatterns(contacts);
+  } catch (error) {
+    console.error('Backtest error:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('email:verify-mx', async (_: any, domain: string) => {
+  try {
+    return await verifyMx(domain);
+  } catch (error) {
+    console.error('MX verify error:', error);
+    return { valid: false, domain, exchanges: [], cached: false };
+  }
+});
+
+ipcMain.handle('email:parse-linkedin', async (_: any, url: string) => {
+  try {
+    return parseLinkedInUrl(url);
+  } catch (error) {
+    console.error('LinkedIn parse error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('email:detect-pattern', async (_: any, contacts: { name: string; email: string }[]) => {
+  try {
+    return detectDomainPattern(contacts);
+  } catch (error) {
+    console.error('Pattern detection error:', error);
+    return null;
   }
 });
 
