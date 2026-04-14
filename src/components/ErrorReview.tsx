@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { fireCampaignConfetti } from '../utils/confetti';
 
 interface ErrorReviewProps {
   operationId: string;
@@ -21,6 +22,13 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
 
   const completedResults = results.filter(r => r.status === 'completed');
   const failedResults = results.filter(r => r.status === 'failed');
+
+  // Fire confetti when campaign has successful results
+  useEffect(() => {
+    if (completedResults.length > 0) {
+      fireCampaignConfetti();
+    }
+  }, []);
 
   const handleRetryFailed = async () => {
     setRetryCount(prev => prev + 1);

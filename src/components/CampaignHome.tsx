@@ -122,12 +122,16 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
 
       {/* Campaign Grid */}
       {campaigns.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <motion.div
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          initial="hidden"
+          animate="show"
+          variants={{ show: { transition: { staggerChildren: 0.07 } } }}
+        >
           {campaigns.map(campaign => (
             <motion.div
               key={campaign.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
               className="card bg-slate-800/80 hover:bg-slate-800 border-slate-700 hover:border-slate-600 cursor-pointer transition-all group"
               onClick={() => onOpenCampaign(campaign.id)}
             >
@@ -158,7 +162,7 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
               </div>
             </motion.div>
           ))}
-        </div>
+        </motion.div>
       ) : !showCreateForm ? (
         <div className="rounded-xl border border-dashed border-slate-700 p-12 text-center bg-slate-800/50">
           <Building2 className="h-10 w-10 text-slate-600 mx-auto mb-3" />
@@ -168,6 +172,17 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
           </button>
         </div>
       ) : null}
+
+      {/* Cmd+K hint */}
+      <div className="text-center pt-4 border-t border-slate-800">
+        <p className="text-xs text-slate-600">
+          Press{' '}
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-500">
+            {typeof navigator !== 'undefined' && navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl+'}K
+          </kbd>
+          {' '}for quick actions — navigate, create campaigns, and more
+        </p>
+      </div>
     </div>
   );
 };
