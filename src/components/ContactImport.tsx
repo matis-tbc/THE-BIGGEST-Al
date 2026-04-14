@@ -9,6 +9,8 @@ import {
 } from "../utils/csvParser";
 import type { ColumnInference } from "../utils/csvParser";
 import { projectStore, StoredTemplate } from "../services/projectStore";
+import { validateContacts as sharedValidateContacts } from "../utils/contactValidation";
+import { trimAllFields, dedupeByEmail, filterValidEmails, extractFirstNames } from "../utils/contactTransforms";
 import { ColumnMapper } from "./ColumnMapper";
 
 interface Contact {
@@ -58,18 +60,8 @@ export const ContactImport: React.FC<ContactImportProps> = ({
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const revalidate = (nextContacts: Contact[]) => {
-    const errors: string[] = [];
-    const emailSet = new Set<string>();
-    nextContacts.forEach((contact, index) => {
-      if (!contact.email || !validateEmail(contact.email)) {
-        errors.push(`Row ${index + 2}: Invalid email "${contact.email}"`);
-      }
-      if (contact.email && emailSet.has(contact.email.toLowerCase())) {
-        errors.push(`Row ${index + 2}: Duplicate email "${contact.email}"`);
-      }
-      emailSet.add((contact.email || "").toLowerCase());
-    });
-    setValidationErrors(errors);
+    const result = sharedValidateContacts(nextContacts);
+    setValidationErrors(result.errors);
   };
 
   const loadParsedContacts = async (parsedContacts: ParsedContact[]) => {
@@ -370,51 +362,10 @@ export const ContactImport: React.FC<ContactImportProps> = ({
 
   const applyBulkAction = (action: "trim" | "dedupe" | "invalid-only" | "extract-first-name") => {
     let next = [...contacts];
-    if (action === "trim") {
-      next = next.map((contact) => {
-        const updated: Contact = { ...contact };
-        Object.keys(updated).forEach((key) => {
-          updated[key] = (updated[key] || "").trim();
-        });
-        return updated;
-      });
-    }
-    if (action === "dedupe") {
-      const seen = new Set<string>();
-      next = next.filter((contact) => {
-        const emailKey = (contact.email || "").toLowerCase();
-        if (!emailKey) return true;
-        if (seen.has(emailKey)) return false;
-        seen.add(emailKey);
-        return true;
-      });
-    }
-    if (action === "invalid-only") {
-      next = next.filter((contact) => validateEmail(contact.email));
-    }
-    if (action === "extract-first-name") {
-      next = next.map((contact) => {
-        // Extract first name from the normalized lowercase `name` field
-        const rawName = (contact.name || "").trim();
-        if (!rawName) return contact;
-        const firstName = rawName.split(/\s+/)[0];
-
-        const updated: Contact = { ...contact, name: firstName };
-
-        // Also strip any raw CSV header columns that hold name-like values
-        // e.g. "Name", "First Name", "Full Name" — so {{Name}} in templates is also first-name-only
-        const rec = updated as Record<string, string | null | undefined>;
-        Object.keys(rec).forEach((key) => {
-          const lk = key.toLowerCase().replace(/[^a-z]/g, "");
-          if ((lk === "name" || lk === "firstname" || lk === "fullname") && key !== "id") {
-            const val = ((rec[key] as string) || "").trim();
-            if (val) rec[key] = val.split(/\s+/)[0];
-          }
-        });
-
-        return updated;
-      });
-    }
+    if (action === "trim") next = trimAllFields(next);
+    if (action === "dedupe") next = dedupeByEmail(next);
+    if (action === "invalid-only") next = filterValidEmails(next);
+    if (action === "extract-first-name") next = extractFirstNames(next);
     setContacts(next);
     revalidate(next);
   };

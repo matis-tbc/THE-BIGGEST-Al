@@ -593,70 +593,67 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
           </div>
         )}
 
-        {/* Visual Editor Content */}
-        {editorMode === "visual" && (
-          <div className="border border-gray-600 rounded-xl overflow-hidden bg-slate-900">
-            {/* Template Headers */}
-            <div className="bg-slate-800/80 border-b border-gray-600 px-4 py-3 space-y-3">
+        {/* Subject Lines & To - always visible */}
+        <div className="border border-gray-600 rounded-xl overflow-hidden bg-slate-900">
+          <div className="bg-slate-800/80 border-b border-gray-600 px-4 py-3 space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-300">Subject Lines (A/B Testing)</label>
+                <button onClick={handleAddSubject} className="text-xs text-yellow-500 hover:text-yellow-400 flex items-center">
+                  <Plus className="h-3 w-3 mr-1" /> Add Subject Option
+                </button>
+              </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-slate-300">Subject Lines (A/B Testing)</label>
-                  <button onClick={handleAddSubject} className="text-xs text-yellow-500 hover:text-yellow-400 flex items-center">
-                    <Plus className="h-3 w-3 mr-1" /> Add Subject Option
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {visualSubjects.map((subject, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-slate-500 w-5">{(index + 1).toString().padStart(2, '0')}.</span>
-                      <input
-                        type="text"
-                        value={subject}
-                        onChange={(e) => handleUpdateSubject(index, e.target.value)}
-                        placeholder="Enter subject line..."
-                        className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-yellow-500/50 focus:ring-1 focus:ring-yellow-500/50 transition-colors"
-                      />
-                      {visualSubjects.length > 1 && (
-                        <button onClick={() => handleRemoveSubject(index)} className="text-slate-500 hover:text-rose-400 p-1">
-                          <X className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Distribution pattern hint */}
-                {visualSubjects.length > 1 && (
-                  <div className="bg-slate-900/50 rounded-lg px-3 py-2 mt-1">
-                    <p className="text-xs text-slate-500">
-                      Subjects alternate evenly: Contact #1 gets Subject 01, #2 gets Subject 02, etc.
-                      {contacts.length > 0 && (
-                        <span className="text-slate-400 ml-1">
-                          With {contacts.length} contacts:{" "}
-                          {visualSubjects.map((_, i) => {
-                            const count = Math.floor(contacts.length / visualSubjects.length) + (i < contacts.length % visualSubjects.length ? 1 : 0);
-                            return `Subject ${(i + 1).toString().padStart(2, "0")} = ${count}`;
-                          }).join(", ")}
-                        </span>
-                      )}
-                    </p>
+                {visualSubjects.map((subject, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-500 w-5">{(index + 1).toString().padStart(2, '0')}.</span>
+                    <input
+                      type="text"
+                      value={subject}
+                      onChange={(e) => handleUpdateSubject(index, e.target.value)}
+                      placeholder="Enter subject line..."
+                      className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-yellow-500/50 focus:ring-1 focus:ring-yellow-500/50 transition-colors"
+                    />
+                    {visualSubjects.length > 1 && (
+                      <button onClick={() => handleRemoveSubject(index)} className="text-slate-500 hover:text-rose-400 p-1">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
 
-              <div className="flex items-center">
-                <span className="text-slate-400 font-mono text-sm w-16">To:</span>
-                <input
-                  type="text"
-                  value={visualTo}
-                  onChange={(e) => setVisualTo(e.target.value)}
-                  placeholder="{{email}}"
-                  className="flex-1 bg-transparent border-0 focus:ring-0 text-slate-200 placeholder-slate-600 font-mono text-sm"
-                />
-              </div>
+              {/* Distribution pattern hint */}
+              {visualSubjects.length > 1 && (
+                <div className="bg-slate-900/50 rounded-lg px-3 py-2 mt-1">
+                  <p className="text-xs text-slate-500">
+                    Subjects alternate evenly: Contact #1 gets Subject 01, #2 gets Subject 02, etc.
+                    {contacts.length > 0 && (
+                      <span className="text-slate-400 ml-1">
+                        With {contacts.length} contacts:{" "}
+                        {visualSubjects.map((_, i) => {
+                          const count = Math.floor(contacts.length / visualSubjects.length) + (i < contacts.length % visualSubjects.length ? 1 : 0);
+                          return `Subject ${(i + 1).toString().padStart(2, "0")} = ${count}`;
+                        }).join(", ")}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center">
+              <span className="text-slate-400 font-mono text-sm w-16">To:</span>
+              <input
+                type="text"
+                value={visualTo}
+                onChange={(e) => setVisualTo(e.target.value)}
+                placeholder="{{email}}"
+                className="flex-1 bg-transparent border-0 focus:ring-0 text-slate-200 placeholder-slate-600 font-mono text-sm"
+              />
             </div>
           </div>
-        )}
+        </div>
 
         {/* Editor Content Box */}
         <div className="border border-gray-600 rounded-xl overflow-hidden mt-4">

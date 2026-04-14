@@ -156,7 +156,7 @@ export function mergeTemplate(template: string, contact: Contact): string {
   const templateVariables = extractVariables(template);
   templateVariables.forEach((variable) => {
     const value = getMappedValue(variable);
-    const regex = new RegExp(`\\{\\{${variable}\\}\\}`, "g");
+    const regex = new RegExp(`\\{\\{${escapeRegex(variable)}\\}\\}`, "g");
     merged = merged.replace(regex, value);
   });
 

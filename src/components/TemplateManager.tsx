@@ -58,6 +58,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
   const [showSubjectEdit, setShowSubjectEdit] = useState(false);
   const [showMappingDetails, setShowMappingDetails] = useState(false);
   const convertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const availableVariables = useMemo(() => {
     const variables = new Set<string>();
@@ -85,6 +86,9 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
 
   const handleNewTemplate = () => {
     setSelectedTemplate(null);
+    setTimeout(() => {
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
@@ -570,9 +574,14 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
       {/* Template List */}
       {templates.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-slate-200">
-            Saved Templates
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium text-slate-200">
+              Saved Templates
+            </h3>
+            <button onClick={handleNewTemplate} className="btn-secondary text-sm">
+              + New Template
+            </button>
+          </div>
           {templates.map((template) => (
             <div
               key={template.id}
@@ -592,7 +601,30 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
                     {template.variables.map((v) => `{{${v}}}`).join(", ")}
                   </p>
                 </div>
-                <div className="flex items-center">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTemplate(template);
+                      setTimeout(() => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+                    }}
+                    className="p-1.5 text-slate-500 hover:text-yellow-500 transition-colors"
+                    title="Edit template"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete "${template.name}"?`)) {
+                        handleDeleteTemplate(template.id);
+                      }
+                    }}
+                    className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
+                    title="Delete template"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  </button>
                   <input
                     type="radio"
                     checked={selectedTemplate?.id === template.id}
@@ -636,12 +668,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
           </div>
         ) : null}
 
-        <div className="flex justify-end mb-4">
-          <button onClick={handleNewTemplate} className="btn-secondary">
-            New Template
-          </button>
-        </div>
-
+        <div ref={editorRef}>
         <EnhancedTemplateEditor
           template={selectedTemplate}
           contacts={contacts}
@@ -659,6 +686,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
           }}
           onDelete={handleDeleteTemplate}
         />
+        </div>
       </div>
 
       {/* Template Preview */}
