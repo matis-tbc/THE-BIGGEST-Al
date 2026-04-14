@@ -87,6 +87,35 @@ export function convertRawTemplate(rawText: string): ConvertedTemplate {
   return { content: converted, mappings, originalVariables };
 }
 
+export function extractTemplateName(content: string): string {
+  // Try "reaching out to <CompanyName> because" pattern
+  const reachingOut = content.match(
+    /reaching out to ([A-Z0-9{][A-Za-z0-9\s&.,'{}-]+?)(?:\s+because)/i,
+  );
+  if (reachingOut) {
+    const name = reachingOut[1].trim();
+    // If it's a variable reference (single or double brace), this is a generic template
+    if (/^\{/.test(name)) return "";
+    return name;
+  }
+  // Try Subject header
+  const subjectMatch = content.match(/^Subject:\s*(.+)$/im);
+  if (subjectMatch) {
+    const stripped = subjectMatch[1].replace(/\{\{[^}]+\}\}/g, "").replace(/\{[^}]+\}/g, "").trim();
+    if (stripped.length > 2) return stripped;
+  }
+  // Fallback: first meaningful line (skip "Hello", "Dear", etc.)
+  const lines = content.trim().split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^(hello|dear|hi|hey|subject:|to:)/i.test(trimmed)) continue;
+    if (trimmed.length <= 50) return trimmed;
+    return trimmed.slice(0, 40) + "...";
+  }
+  return "";
+}
+
 export function mergeTemplate(template: string, contact: Contact): string {
   let merged = template;
 
@@ -286,6 +315,21 @@ export const DEFAULT_SUBJECTS = [
   "CU Hyperloop // {{Company}}",
   "Partnership Opportunity - CU Hyperloop",
 ];
+
+export function getSubjectsForTemplate(template: Template): string[] {
+  if (template.subjects && template.subjects.length > 0) return template.subjects;
+  const parsed = parseTemplateSections(template.content);
+  if (parsed.subject) return [parsed.subject];
+  return DEFAULT_SUBJECTS;
+}
+
+export function getSubjectForContactIndex(
+  template: Template,
+  index: number,
+): string {
+  const subjects = getSubjectsForTemplate(template);
+  return subjects[index % subjects.length];
+}
 
 export function formatEmailBodyHtml(body: string): string {
   // Normalize Windows/textarea line endings strictly to \n

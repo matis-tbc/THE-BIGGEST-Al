@@ -22,6 +22,7 @@ import {
   extractVariables,
   mergeTemplate,
   parseTemplateSections,
+  DEFAULT_SUBJECTS,
 } from "../utils/templateMerge";
 
 interface Contact {
@@ -108,8 +109,8 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
 
       const parsed = parseTemplateSections(template.content);
       // Support legacy single subject or new subjects array
-      const initialSubjects = template.subjects || (parsed.subject ? [parsed.subject] : [""]);
-      setVisualSubjects(initialSubjects.length > 0 ? initialSubjects : [""]);
+      const initialSubjects = template.subjects || (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
+      setVisualSubjects(initialSubjects.length > 0 ? initialSubjects : DEFAULT_SUBJECTS);
       setVisualTo(parsed.to || "");
       setVisualBody(parsed.body || template.content);
     } else {

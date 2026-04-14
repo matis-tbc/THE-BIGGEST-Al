@@ -5,6 +5,8 @@ import {
   validateTemplate,
   DEFAULT_SUBJECTS,
   formatEmailBodyHtml,
+  getSubjectsForTemplate,
+  getSubjectForContactIndex,
 } from "../utils/templateMerge";
 
 interface Contact {
@@ -109,11 +111,7 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     const missingCUHyperloop = contacts.filter((contact, index) => {
       const activeTemplate = getTemplateForContact(contact);
       if (!activeTemplate) return false;
-      const parsed = parseTemplateSections(activeTemplate.content);
-      const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
-        ? activeTemplate.subjects
-        : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
-      const selectedSubject = availableSubjects[index % availableSubjects.length];
+      const selectedSubject = getSubjectForContactIndex(activeTemplate, index);
       if (!selectedSubject) return true;
       const merged = mergeTemplate(selectedSubject, contact);
       return !merged.toLowerCase().includes('cu hyperloop');
@@ -122,12 +120,7 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     const emptySubjectCount = contacts.filter((contact, index) => {
       const activeTemplate = getTemplateForContact(contact);
       if (!activeTemplate) return false;
-      const parsed = parseTemplateSections(activeTemplate.content);
-      const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
-        ? activeTemplate.subjects
-        : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
-      const selectedSubject = availableSubjects[index % availableSubjects.length];
-
+      const selectedSubject = getSubjectForContactIndex(activeTemplate, index);
       return selectedSubject
         ? !mergeTemplate(selectedSubject, contact).trim()
         : true;
@@ -148,11 +141,7 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     contacts.forEach((contact, index) => {
       const activeTemplate = getTemplateForContact(contact);
       if (!activeTemplate) return;
-      const parsed = parseTemplateSections(activeTemplate.content);
-      const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
-        ? activeTemplate.subjects
-        : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
-      const selectedSubject = availableSubjects[index % availableSubjects.length];
+      const selectedSubject = getSubjectForContactIndex(activeTemplate, index);
       if (selectedSubject) {
         const existing = subjectGroups.get(selectedSubject);
         if (existing) {
@@ -183,10 +172,7 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     const activeTemplate = getTemplateForContact(selectedContact);
     if (!activeTemplate) return null;
     const parsed = parseTemplateSections(activeTemplate.content);
-    const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
-      ? activeTemplate.subjects
-      : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
-    const selectedSubject = availableSubjects[previewIndex % availableSubjects.length];
+    const selectedSubject = getSubjectForContactIndex(activeTemplate, previewIndex);
 
     const rawBody = mergeTemplate(
       parsed.body || activeTemplate.content,
@@ -391,11 +377,8 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
                 {checks.subjectGroups.size > 1 && (() => {
                   const activeTemplate = getTemplateForContact(selectedContact);
                   if (!activeTemplate) return null;
-                  const parsed = parseTemplateSections(activeTemplate.content);
-                  const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
-                    ? activeTemplate.subjects
-                    : (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
-                  const variantIndex = previewIndex % availableSubjects.length;
+                  const subjects = getSubjectsForTemplate(activeTemplate);
+                  const variantIndex = previewIndex % subjects.length;
                   const letter = String.fromCharCode(65 + variantIndex);
                   return (
                     <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-yellow-500/20 text-yellow-500 font-mono font-bold text-[9px]">{letter}</span>

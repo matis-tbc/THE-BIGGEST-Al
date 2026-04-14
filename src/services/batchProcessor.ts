@@ -1,7 +1,7 @@
 import { GraphClientService } from "./graphClient";
 import { AttachmentHandler } from "./attachmentHandler";
 import { TokenManager } from "./tokenManager";
-import { mergeTemplate, parseTemplateSections, DEFAULT_SUBJECTS, formatEmailBodyHtml } from "../utils/templateMerge";
+import { mergeTemplate, parseTemplateSections, formatEmailBodyHtml, getSubjectForContactIndex } from "../utils/templateMerge";
 
 export interface Contact {
   id: string;
@@ -167,13 +167,7 @@ export class BatchProcessor {
           templates.find((t) => t.id === activeId) || templates[0];
         const parsedTemplate = parseTemplateSections(activeTemplate.content);
 
-        // A/B Subject Loading Logic
-        const availableSubjects = activeTemplate.subjects && activeTemplate.subjects.length > 0
-          ? activeTemplate.subjects
-          : (parsedTemplate.subject ? [parsedTemplate.subject] : DEFAULT_SUBJECTS);
-
-        // Select subject based on contact index in the batch to evenly distribute
-        const selectedSubjectTemplate = availableSubjects[index % availableSubjects.length];
+        const selectedSubjectTemplate = getSubjectForContactIndex(activeTemplate, index);
 
         const toTemplate = parsedTemplate.to || "";
         const bodyTemplate = parsedTemplate.body || activeTemplate.content;

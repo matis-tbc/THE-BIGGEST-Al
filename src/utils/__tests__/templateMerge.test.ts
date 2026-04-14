@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { convertRawTemplate, VARIABLE_ALIASES } from "../templateMerge";
+import {
+  convertRawTemplate,
+  VARIABLE_ALIASES,
+  extractTemplateName,
+  getSubjectsForTemplate,
+  getSubjectForContactIndex,
+  DEFAULT_SUBJECTS,
+} from "../templateMerge";
 
 describe("convertRawTemplate", () => {
   it("converts all single-brace variables from Dataset C", () => {
@@ -110,5 +117,106 @@ describe("VARIABLE_ALIASES", () => {
     expect(VARIABLE_ALIASES["contact name"]).toBe("First Name");
     expect(VARIABLE_ALIASES["company name"]).toBe("Company");
     expect(VARIABLE_ALIASES["company"]).toBe("Company");
+  });
+});
+
+describe("extractTemplateName", () => {
+  it("extracts Zayo Group from company-specific template", () => {
+    const text =
+      "Hello {Name},\nMy name is {Your Name}...\nWe are reaching out to Zayo Group because of your role...";
+    expect(extractTemplateName(text)).toBe("Zayo Group");
+  });
+
+  it("extracts Qorvo from template body", () => {
+    const text =
+      "Hello {CONTACT NAME},\n...\nWe are reaching out to Qorvo because of your industry leadership...";
+    expect(extractTemplateName(text)).toBe("Qorvo");
+  });
+
+  it("extracts Digikey from reaching out pattern", () => {
+    const text =
+      "We are reaching out because since the club's beginning in 2017, Digikey has been...";
+    // No "reaching out to X because" pattern here, so falls through
+    expect(extractTemplateName(text)).not.toBe("");
+  });
+
+  it("returns empty for generic template with variable company", () => {
+    const text =
+      "We are reaching out to {Company Name} because your work depends on...";
+    expect(extractTemplateName(text)).toBe("");
+  });
+
+  it("extracts from Subject header", () => {
+    const text = "Subject: Partnership Opportunity\nTo: {{Email}}\n\nHello...";
+    expect(extractTemplateName(text)).toBe("Partnership Opportunity");
+  });
+
+  it("strips variables from Subject header", () => {
+    const text =
+      "Subject: CU Hyperloop // {{Company}}\nTo: {{Email}}\n\nHello...";
+    expect(extractTemplateName(text)).toBe("CU Hyperloop //");
+  });
+
+  it("handles trailing whitespace from Google Docs", () => {
+    const text =
+      "We are reaching out to L3Harris because of your leadership...\n\n\n\n\n";
+    expect(extractTemplateName(text)).toBe("L3Harris");
+  });
+
+  it("returns fallback for plain text with no patterns", () => {
+    const text = "This is a short plain text email with no patterns.";
+    expect(extractTemplateName(text)).toBe(
+      "This is a short plain text email with no patterns.",
+    );
+  });
+});
+
+describe("getSubjectsForTemplate / getSubjectForContactIndex", () => {
+  it("returns template subjects when set", () => {
+    const template = {
+      id: "1",
+      name: "Test",
+      subjects: ["Subject A", "Subject B"],
+      content: "Hello",
+      variables: [],
+    };
+    expect(getSubjectsForTemplate(template)).toEqual([
+      "Subject A",
+      "Subject B",
+    ]);
+  });
+
+  it("falls back to content Subject header", () => {
+    const template = {
+      id: "1",
+      name: "Test",
+      content: "Subject: Custom Subject\n\nHello",
+      variables: [],
+    };
+    expect(getSubjectsForTemplate(template)).toEqual(["Custom Subject"]);
+  });
+
+  it("falls back to DEFAULT_SUBJECTS", () => {
+    const template = {
+      id: "1",
+      name: "Test",
+      content: "Hello world",
+      variables: [],
+    };
+    expect(getSubjectsForTemplate(template)).toEqual(DEFAULT_SUBJECTS);
+  });
+
+  it("rotates subjects by index", () => {
+    const template = {
+      id: "1",
+      name: "Test",
+      subjects: ["A", "B"],
+      content: "Hello",
+      variables: [],
+    };
+    expect(getSubjectForContactIndex(template, 0)).toBe("A");
+    expect(getSubjectForContactIndex(template, 1)).toBe("B");
+    expect(getSubjectForContactIndex(template, 2)).toBe("A");
+    expect(getSubjectForContactIndex(template, 3)).toBe("B");
   });
 });
