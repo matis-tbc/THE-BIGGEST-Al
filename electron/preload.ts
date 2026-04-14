@@ -27,6 +27,7 @@ declare global {
       emailVerifyMx: (domain: string) => Promise<any>;
       emailParseLinkedin: (url: string) => Promise<any>;
       emailDetectPattern: (contacts: { name: string; email: string }[]) => Promise<any>;
+      emailResolveDomain: (companyName: string) => Promise<any>;
       onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => () => void;
     };
   }
@@ -49,6 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   emailVerifyMx: (domain: string) => ipcRenderer.invoke('email:verify-mx', domain),
   emailParseLinkedin: (url: string) => ipcRenderer.invoke('email:parse-linkedin', url),
   emailDetectPattern: (contacts: { name: string; email: string }[]) => ipcRenderer.invoke('email:detect-pattern', contacts),
+  emailResolveDomain: (companyName: string) => ipcRenderer.invoke('email:resolve-domain', companyName),
   onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => {
     const handler = (_: any, result: { success: boolean; message?: string }) => callback(result);
     ipcRenderer.on('auth:completed', handler);

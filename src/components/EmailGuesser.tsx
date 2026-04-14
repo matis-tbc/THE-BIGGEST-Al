@@ -8,13 +8,21 @@ interface Contact {
   [key: string]: string | null | undefined;
 }
 
+interface Company {
+  name: string;
+  website?: string;
+  [key: string]: any;
+}
+
 interface EmailGuesserProps {
   contacts: Contact[];
+  companies?: Company[];
   onContactsUpdated: (contacts: Contact[]) => void;
 }
 
 export const EmailGuesser: React.FC<EmailGuesserProps> = ({
   contacts,
+  companies,
   onContactsUpdated,
 }) => {
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(
@@ -27,6 +35,8 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
     { name: string; email: string; confidence: number }[]
   >([]);
   const [isProcessingUrls, setIsProcessingUrls] = useState(false);
+  const [resolvedDomains, setResolvedDomains] = useState<Map<string, string | null>>(new Map());
+  const [isResolvingDomains, setIsResolvingDomains] = useState(false);
 
   // Known contacts for pattern training (those with valid emails)
   const knownContacts = useMemo(
@@ -56,16 +66,30 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
     }
   };
 
-  const guessEmailForContact = async (
-    contact: Contact,
-    domain: string,
-  ): Promise<EmailGuess[]> => {
-    if (!window.electronAPI?.emailGuess) return [];
-    return await window.electronAPI.emailGuess(
-      contact.name,
-      domain,
-      knownContacts,
-    );
+  const resolveCompanyDomains = async () => {
+    if (!companies?.length || !window.electronAPI?.emailResolveDomain) return;
+    setIsResolvingDomains(true);
+    const results = new Map<string, string | null>();
+    for (const company of companies) {
+      // Skip if we already know this domain from contacts
+      const knownDomain = knownContacts.find((c) => {
+        const contactCompany = (c as any).Company || (c as any).company;
+        return contactCompany?.toLowerCase() === company.name.toLowerCase();
+      });
+      if (knownDomain) {
+        results.set(company.name, knownDomain.email.split("@")[1]);
+        continue;
+      }
+      const result = await window.electronAPI.emailResolveDomain(company.name);
+      results.set(company.name, result.domain);
+    }
+    setResolvedDomains(results);
+    // Auto-populate LinkedIn domain if only one company resolved
+    const resolved = [...results.entries()].filter(([, d]) => d);
+    if (resolved.length === 1 && !linkedInDomain) {
+      setLinkedInDomain(resolved[0][1]!);
+    }
+    setIsResolvingDomains(false);
   };
 
   const [mxValid, setMxValid] = useState<boolean | null>(null);
@@ -213,6 +237,47 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
           </div>
         )}
       </div>
+
+      {/* Company Domain Resolver */}
+      {companies && companies.length > 0 && (
+        <div className="border border-slate-700 rounded-xl bg-slate-800/30 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h4 className="text-sm font-medium text-slate-200">Company Domains</h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Resolve email domains for {companies.length} companies via MX verification
+              </p>
+            </div>
+            <button
+              onClick={resolveCompanyDomains}
+              disabled={isResolvingDomains}
+              className="btn-secondary text-xs disabled:opacity-50"
+            >
+              {isResolvingDomains ? "Resolving..." : "Resolve Domains"}
+            </button>
+          </div>
+
+          {resolvedDomains.size > 0 && (
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {[...resolvedDomains.entries()].map(([company, domain]) => (
+                <div key={company} className="flex items-center justify-between text-xs bg-slate-900/50 rounded px-2 py-1.5">
+                  <span className="text-slate-300">{company}</span>
+                  {domain ? (
+                    <button
+                      onClick={() => setLinkedInDomain(domain)}
+                      className="text-emerald-400 font-mono hover:underline"
+                    >
+                      {domain}
+                    </button>
+                  ) : (
+                    <span className="text-slate-600">not found</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* LinkedIn URL Quick Add */}
       <div className="border border-slate-700 rounded-xl bg-slate-800/30 p-4">

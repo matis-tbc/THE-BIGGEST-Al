@@ -6,7 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const { AuthService } = require('./auth');
 const { CompanyGeneratorService } = require('./companyGeneratorService');
-const { guessEmail, guessEmailBatch, backtestPatterns, parseLinkedInUrl, detectDomainPattern } = require('../src/utils/emailPatterns');
+const { guessEmail, guessEmailBatch, backtestPatterns, parseLinkedInUrl, detectDomainPattern, inferDomainCandidates } = require('../src/utils/emailPatterns');
 const { verifyMx } = require('./emailPatternService');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -311,6 +311,22 @@ ipcMain.handle('email:detect-pattern', async (_: any, contacts: { name: string; 
   } catch (error) {
     console.error('Pattern detection error:', error);
     return null;
+  }
+});
+
+ipcMain.handle('email:resolve-domain', async (_: any, companyName: string) => {
+  try {
+    const candidates = inferDomainCandidates(companyName);
+    for (const candidate of candidates) {
+      const mx = await verifyMx(candidate);
+      if (mx.valid) {
+        return { domain: candidate, mxValid: true, candidates };
+      }
+    }
+    return { domain: null, mxValid: false, candidates };
+  } catch (error) {
+    console.error('Domain resolve error:', error);
+    return { domain: null, mxValid: false, candidates: [] };
   }
 });
 

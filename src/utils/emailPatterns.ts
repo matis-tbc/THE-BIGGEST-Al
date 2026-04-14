@@ -338,3 +338,35 @@ export function parseLinkedInUrl(
     lastName: capitalize(parts[parts.length - 1]),
   };
 }
+
+// Generate candidate email domains from a company name.
+// Returns candidates ordered by likelihood (caller should MX-verify).
+const COMPANY_SUFFIXES =
+  /\s+(inc\.?|corp\.?|corporation|llc|ltd\.?|technologies|technology|group|systems|company|co\.?)$/i;
+
+export function inferDomainCandidates(companyName: string): string[] {
+  const cleaned = companyName.trim().replace(COMPANY_SUFFIXES, "").trim();
+  const lower = cleaned.toLowerCase();
+  const words = lower.split(/[\s-]+/).filter((w) => w.length > 0);
+  const candidates: string[] = [];
+
+  if (words.length === 1) {
+    candidates.push(`${words[0]}.com`);
+  } else {
+    // First word (most common: "zayo.com" for "Zayo Group")
+    candidates.push(`${words[0]}.com`);
+    // Joined words ("zayogroup.com")
+    candidates.push(`${words.join("")}.com`);
+    // Hyphenated ("busy-bee.com" for "Busy Bee Tools")
+    if (words.length <= 3) {
+      candidates.push(`${words.join("-")}.com`);
+    }
+    // Full lower no spaces ("texasinstruments.com")
+    if (words.length === 2) {
+      candidates.push(`${words[0]}${words[1]}.com`);
+    }
+  }
+
+  // Deduplicate
+  return [...new Set(candidates)];
+}

@@ -11,6 +11,8 @@ import type { ColumnInference } from "../utils/csvParser";
 import { projectStore, StoredTemplate } from "../services/projectStore";
 import { validateContacts as sharedValidateContacts } from "../utils/contactValidation";
 import { trimAllFields, dedupeByEmail, filterValidEmails, extractFirstNames } from "../utils/contactTransforms";
+import { guessEmail } from "../utils/emailPatterns";
+import { getPattern, getDomain, learnFromContacts } from "../services/emailPatternStore";
 import { ColumnMapper } from "./ColumnMapper";
 
 interface Contact {
@@ -133,6 +135,19 @@ export const ContactImport: React.FC<ContactImportProps> = ({
 
     setContacts(normalizedContacts);
     revalidate(normalizedContacts);
+
+    // Auto-learn email patterns from imported contacts
+    const validForLearning = normalizedContacts.filter(
+      (c) => c.email && c.email.includes("@"),
+    );
+    if (validForLearning.length > 0) {
+      const result = learnFromContacts(validForLearning);
+      if (result.updated > 0) {
+        console.info(
+          `[EmailPatterns] Learned ${result.updated} patterns (${result.newDomains} new domains)`,
+        );
+      }
+    }
 
     if (normalizedContacts.length === 0) {
       setError("No valid contacts found. Please check your data format.");
@@ -360,12 +375,38 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     revalidate(next);
   };
 
-  const applyBulkAction = (action: "trim" | "dedupe" | "invalid-only" | "extract-first-name") => {
+  const applyBulkAction = (action: "trim" | "dedupe" | "invalid-only" | "extract-first-name" | "guess-emails") => {
     let next = [...contacts];
     if (action === "trim") next = trimAllFields(next);
     if (action === "dedupe") next = dedupeByEmail(next);
     if (action === "invalid-only") next = filterValidEmails(next);
     if (action === "extract-first-name") next = extractFirstNames(next);
+    if (action === "guess-emails") {
+      // Build known contacts from those that already have emails
+      const known = next
+        .filter((c) => c.email && c.email.includes("@"))
+        .map((c) => ({ name: c.name, email: c.email }));
+
+      next = next.map((c) => {
+        // Skip contacts that already have valid emails
+        if (c.email && validateEmail(c.email)) return c;
+
+        // Need a company to guess the domain
+        const company = (c as any).Company || (c as any).company;
+        if (!company) return c;
+
+        // Try pattern store for domain
+        const domainInfo = getDomain(company);
+        const domain = domainInfo?.domain;
+        if (!domain) return c;
+
+        const guesses = guessEmail(c.name, domain, known);
+        if (guesses.length > 0 && guesses[0].confidence > 0.5) {
+          return { ...c, email: guesses[0].email, _guessed: "true" };
+        }
+        return c;
+      });
+    }
     setContacts(next);
     revalidate(next);
   };
@@ -690,6 +731,12 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                   className="btn-secondary text-xs !py-1.5"
                 >
                   Keep valid only
+                </button>
+                <button
+                  onClick={() => applyBulkAction("guess-emails")}
+                  className="btn-secondary text-xs !py-1.5 text-yellow-500 border-yellow-500/30 hover:border-yellow-500/50"
+                >
+                  Guess emails
                 </button>
                 <button
                   onClick={exportCorrectedCsv}

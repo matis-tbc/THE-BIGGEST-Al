@@ -2,13 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Building2, Users, FileText, History, Play,
-  Copy, Check, Trash2, Archive, Edit2, X
+  Copy, Check, Trash2, Archive, Edit2, X, Mail
 } from 'lucide-react';
 import { campaignStore, Campaign, GeneratedCompany } from '../services/campaignStore';
 import { projectStore } from '../services/projectStore';
 import { validateEmail } from '../utils/csvParser';
+import { EmailGuesser } from './EmailGuesser';
 
-type Tab = 'companies' | 'contacts' | 'template' | 'runs';
+type Tab = 'companies' | 'contacts' | 'emails' | 'template' | 'runs';
 
 interface CampaignDetailProps {
   campaignId: string;
@@ -126,6 +127,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
   const tabs: { key: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: 'companies', label: 'Companies', icon: <Building2 className="h-4 w-4" />, count: campaign.companies.length },
     { key: 'contacts', label: 'Contacts', icon: <Users className="h-4 w-4" />, count: campaign.contacts.length },
+    { key: 'emails', label: 'Email Finder', icon: <Mail className="h-4 w-4" />, count: campaign.contacts.filter(c => !c.email || !validateEmail(c.email)).length || undefined },
     { key: 'template', label: 'Template', icon: <FileText className="h-4 w-4" /> },
     { key: 'runs', label: 'Run History', icon: <History className="h-4 w-4" />, count: campaign.runs.length },
   ];
@@ -403,6 +405,18 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {/* Email Finder Tab */}
+        {activeTab === 'emails' && (
+          <EmailGuesser
+            contacts={campaign.contacts}
+            companies={campaign.companies}
+            onContactsUpdated={(updated) => {
+              campaignStore.setContacts(campaignId, updated);
+              reload();
+            }}
+          />
         )}
 
         {/* Template Tab */}
