@@ -33,7 +33,19 @@ function load(): PatternStore {
   return { patterns: [], domains: [] };
 }
 
+const MAX_PATTERNS = 500;
+const MAX_DOMAINS = 500;
+
 function save(store: PatternStore): void {
+  // Evict oldest entries if over capacity
+  if (store.patterns.length > MAX_PATTERNS) {
+    store.patterns.sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated));
+    store.patterns = store.patterns.slice(0, MAX_PATTERNS);
+  }
+  if (store.domains.length > MAX_DOMAINS) {
+    store.domains.sort((a, b) => b.lastChecked.localeCompare(a.lastChecked));
+    store.domains = store.domains.slice(0, MAX_DOMAINS);
+  }
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 

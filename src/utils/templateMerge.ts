@@ -331,6 +331,14 @@ export function getSubjectForContactIndex(
   return subjects[index % subjects.length];
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function formatEmailBodyHtml(body: string): string {
   // Normalize Windows/textarea line endings strictly to \n
   let htmlBody = body.replace(/\r\n/g, "\n");
@@ -347,10 +355,10 @@ export function formatEmailBodyHtml(body: string): string {
     signatureRegex,
     (_match, name, role, major, contactDetails) => {
       return `<div style="font-family: Arial, sans-serif; line-height: 1.2; margin-top: 12px; margin-bottom: 0;">
-  <span style="font-size: 15px;">${name.trim()}</span><br>
-  <span style="font-size: 14px;"><strong style="color: #CFB87C;">CU Hyperloop</strong> <span style="color: #6B7280;">| ${role.trim()}</span></span><br>
-  <span style="font-size: 14px;"><strong style="color: #CFB87C;">CU Boulder</strong> <span style="color: #6B7280;">| ${major.trim()}</span></span><br>
-  <span style="font-size: 14px; color: #6B7280;">${contactDetails.trim()}</span>
+  <span style="font-size: 15px;">${escapeHtml(name.trim())}</span><br>
+  <span style="font-size: 14px;"><strong style="color: #CFB87C;">CU Hyperloop</strong> <span style="color: #6B7280;">| ${escapeHtml(role.trim())}</span></span><br>
+  <span style="font-size: 14px;"><strong style="color: #CFB87C;">CU Boulder</strong> <span style="color: #6B7280;">| ${escapeHtml(major.trim())}</span></span><br>
+  <span style="font-size: 14px; color: #6B7280;">${escapeHtml(contactDetails.trim())}</span>
 </div>`;
     },
   );

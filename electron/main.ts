@@ -271,7 +271,9 @@ ipcMain.handle('company:search', async (_: any, query: string, filters?: { indus
 // Email pattern guesser IPC handlers
 ipcMain.handle('email:guess', async (_: any, fullName: string, domain: string, knownContacts: { name: string; email: string }[]) => {
   try {
-    return guessEmail(fullName, domain, knownContacts);
+    if (!fullName || !domain || !Array.isArray(knownContacts)) return [];
+    const capped = knownContacts.slice(0, 5000);
+    return guessEmail(fullName, domain, capped);
   } catch (error) {
     console.error('Email guess error:', error);
     return [];
@@ -280,7 +282,9 @@ ipcMain.handle('email:guess', async (_: any, fullName: string, domain: string, k
 
 ipcMain.handle('email:backtest', async (_: any, contacts: { name: string; email: string }[]) => {
   try {
-    return backtestPatterns(contacts);
+    if (!Array.isArray(contacts)) return { totalContacts: 0, testableContacts: 0, correctGuesses: 0, accuracy: 0, perDomain: [] };
+    const capped = contacts.slice(0, 5000);
+    return backtestPatterns(capped);
   } catch (error) {
     console.error('Backtest error:', error);
     throw error;
