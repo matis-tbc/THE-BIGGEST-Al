@@ -8,6 +8,7 @@ import {
   getSubjectsForTemplate,
   getSubjectForContactIndex,
 } from "../utils/templateMerge";
+import { sanitizeEmailHtml } from "../utils/sanitize";
 
 interface Contact {
   id: string;
@@ -382,8 +383,8 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
               </p>
               <div
                 className="bg-white border border-slate-300 rounded-lg p-4 max-h-64 overflow-y-auto text-gray-900"
-                // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via DOMPurify in PR 1
-                dangerouslySetInnerHTML={{ __html: preview.body }}
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: content is DOMPurify-sanitized before render
+                dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(preview.body) }}
               />
             </div>
           )}

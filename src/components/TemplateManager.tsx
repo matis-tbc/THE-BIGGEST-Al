@@ -13,6 +13,7 @@ import {
 } from "../utils/templateMerge";
 import type { ConvertedTemplate } from "../utils/templateMerge";
 import { projectStore, type StoredTemplate } from "../services/projectStore";
+import { sanitizeEmailHtml } from "../utils/sanitize";
 import { EnhancedTemplateEditor } from "./EnhancedTemplateEditor";
 
 interface Contact {
@@ -757,8 +758,8 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
                   )}
                   <div
                     className="bg-white text-gray-900 p-4 rounded-lg text-base border border-slate-300 shadow-sm"
-                    // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via DOMPurify in PR 1
-                    dangerouslySetInnerHTML={{ __html: preview.body }}
+                    // biome-ignore lint/security/noDangerouslySetInnerHtml: content is DOMPurify-sanitized before render
+                    dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(preview.body) }}
                   />
                 </div>
               );

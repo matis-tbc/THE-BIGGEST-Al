@@ -31,6 +31,21 @@ const { classifyAndPersist, reclassify } = require("./classifyReply");
 const isDev = process.env.NODE_ENV === "development";
 const OAUTH_PORT = 3000;
 const OAUTH_HOST = "127.0.0.1";
+const EXTERNAL_URL_ALLOWED_PROTOCOLS = new Set(["https:", "http:", "mailto:"]);
+
+function openSafeExternal(raw: string): Promise<void> | void {
+  try {
+    const u = new URL(raw);
+    if (!EXTERNAL_URL_ALLOWED_PROTOCOLS.has(u.protocol)) {
+      console.warn("Blocked openExternal for disallowed protocol:", u.protocol);
+      return;
+    }
+    return shell.openExternal(raw);
+  } catch {
+    console.warn("Blocked openExternal for invalid URL");
+  }
+}
+
 let mainWindow: any;
 let oauthServer: any;
 interface PendingAuth {
@@ -119,6 +134,7 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, "preload.js"),
     },
     titleBarStyle: "hiddenInset",
@@ -139,7 +155,7 @@ function createWindow(): void {
 
   // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
-    shell.openExternal(url);
+    openSafeExternal(url);
     return { action: "deny" };
   });
 }
@@ -676,7 +692,7 @@ ipcMain.handle(
 
 ipcMain.handle("app:open-external", async (_: any, url: string) => {
   try {
-    await shell.openExternal(url);
+    await openSafeExternal(url);
     return true;
   } catch (error) {
     console.error("Open external error:", error);
