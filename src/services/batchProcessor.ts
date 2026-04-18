@@ -1,6 +1,3 @@
-import { GraphClientService } from "./graphClient";
-import { AttachmentHandler } from "./attachmentHandler";
-import { TokenManager } from "./tokenManager";
 import { mergeTemplate, parseTemplateSections, formatEmailBodyHtml, getSubjectForContactIndex } from "../utils/templateMerge";
 
 export interface Contact {
@@ -26,22 +23,53 @@ interface ProcessingResult {
   error?: string;
 }
 
-export class BatchProcessor {
-  private graphService: GraphClientService;
-  private attachmentHandler: AttachmentHandler;
-  private tokenManager: TokenManager;
-  private readonly BATCH_SIZE = 20; // 20 requests per array loop. `graphClient` natively serializes them so we can batch freely.
-  private readonly MAX_CONCURRENT_BATCHES = 1; // Strict serial execution
-  private readonly DEFAULT_CC_EMAILS = ["cuhyperloop@colorado.edu"];
+export type SendMode = "draft" | "send-now" | "schedule";
 
-  constructor() {
-    this.graphService = new GraphClientService();
-    this.attachmentHandler = new AttachmentHandler(this.graphService);
-    this.tokenManager = new TokenManager(this.graphService);
+export interface SendOptions {
+  mode: SendMode;
+  staggerSeconds: number;
+  scheduledForIso?: string;
+  ccEmails?: string[];
+}
+
+const DEFAULT_CC_EMAILS = ["cuhyperloop@colorado.edu"];
+
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
   }
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
+async function fileToBase64(file: File): Promise<{ name: string; mime: string; base64: string }> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+  }
+  return {
+    name: file.name,
+    mime: file.type || "application/octet-stream",
+    base64: btoa(binary),
+  };
+}
+
+function parseRecipients(input: string): string[] {
+  if (!input) return [];
+  return input
+    .split(/[;,]+/)
+    .flatMap((part) => part.split(/\s+/))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+export class BatchProcessor {
   async initialize(): Promise<boolean> {
-    return await this.tokenManager.initialize();
+    if (!window.electronAPI) return false;
+    const tokens = await window.electronAPI.getTokens();
+    return !!tokens?.accessToken;
   }
 
   async processContacts(
@@ -49,248 +77,104 @@ export class BatchProcessor {
     templates: Template[],
     defaultTemplateId: string | null,
     attachment: File | null,
+    sendOptions: SendOptions,
     onProgress: (results: ProcessingResult[]) => void,
   ): Promise<string> {
-    const operationId = `op-${Date.now()}`;
+    if (!window.electronAPI) {
+      throw new Error("Electron bridge unavailable");
+    }
+
+    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const recipientIds = contacts.map(() => generateId());
+
     const results: ProcessingResult[] = contacts.map((contact) => ({
       contactId: contact.id,
       status: "pending",
     }));
 
+    let activeAccountEmail: string | null = null;
     try {
-      // Ensure valid token before starting
-      const hasValidToken = await this.tokenManager.ensureValidToken();
-      if (!hasValidToken) {
-        throw new Error("Authentication required. Please sign in again.");
-      }
+      const profile = await window.electronAPI.getUserProfile();
+      activeAccountEmail = (profile?.email || "").toLowerCase() || null;
+    } catch {}
 
-      // Process contacts in batches
-      const batches = this.createBatches(contacts, this.BATCH_SIZE);
-      const processedBatches = await this.processBatchesInParallel(
-        batches,
-        templates,
-        defaultTemplateId,
-        attachment !== null,
-        results,
-        onProgress,
-      );
+    const baseCc = sendOptions.ccEmails ?? DEFAULT_CC_EMAILS;
+    const effectiveCc = activeAccountEmail
+      ? baseCc.filter((cc) => cc.toLowerCase() !== activeAccountEmail)
+      : baseCc;
 
-      // Attach files to successfully created drafts
-      if (attachment) {
-        await this.attachFilesToDrafts(
-          processedBatches,
-          attachment,
-          results,
-          onProgress,
-        );
-      }
+    const recipients = contacts.map((contact, index) => {
+      const activeId = contact.templateId || defaultTemplateId;
+      const activeTemplate = templates.find((t) => t.id === activeId) || templates[0];
+      const parsedTemplate = parseTemplateSections(activeTemplate.content);
+      const selectedSubjectTemplate = getSubjectForContactIndex(activeTemplate, index);
+      const toTemplate = parsedTemplate.to || "";
+      const bodyTemplate = parsedTemplate.body || activeTemplate.content;
+      const subject = mergeTemplate(selectedSubjectTemplate, contact).trim();
+      const rawBody = mergeTemplate(bodyTemplate, contact);
+      const bodyHtml = formatEmailBodyHtml(rawBody);
+      const mergedRecipients = mergeTemplate(toTemplate, contact).trim();
+      const toEmails = parseRecipients(mergedRecipients);
+      const toEmail = toEmails[0] || contact.email;
+      return {
+        recipientId: recipientIds[index],
+        toEmail,
+        toName: contact.name,
+        ccEmails: effectiveCc,
+        subject,
+        bodyHtml,
+      };
+    });
 
-      return operationId;
-    } catch (error) {
-      console.error("Batch processing failed:", error);
-      throw error;
-    }
-  }
-
-  private createBatches(contacts: Contact[], batchSize: number): Contact[][] {
-    const batches: Contact[][] = [];
-    for (let i = 0; i < contacts.length; i += batchSize) {
-      batches.push(contacts.slice(i, i + batchSize));
-    }
-    return batches;
-  }
-
-  private async processBatchesInParallel(
-    batches: Contact[][],
-    templates: Template[],
-    defaultTemplateId: string | null,
-    hasAttachment: boolean,
-    results: ProcessingResult[],
-    onProgress: (results: ProcessingResult[]) => void,
-  ): Promise<string[]> {
-    const createdMessageIds: string[] = [];
-    const concurrency = Math.min(this.MAX_CONCURRENT_BATCHES, batches.length);
-
-    for (let i = 0; i < batches.length; i += concurrency) {
-      const batchGroup = batches.slice(i, i + concurrency);
-
-      const batchPromises = batchGroup.map(async (batch, batchIndex) => {
-        const globalBatchIndex = i + batchIndex;
-        return await this.processBatch(
-          batch,
-          templates,
-          defaultTemplateId,
-          hasAttachment,
-          globalBatchIndex,
-          results,
-          onProgress,
-        );
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-      createdMessageIds.push(...batchResults.flat());
-
-      // Delay to respect Exchange graph throttling 
-      if (i + concurrency < batches.length) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+    let attachmentPayload: { name: string; mime: string; base64: string } | undefined;
+    if (attachment) {
+      attachmentPayload = await fileToBase64(attachment);
     }
 
-    return createdMessageIds;
-  }
+    const recipientToContactId = new Map<string, string>();
+    recipients.forEach((r, i) => recipientToContactId.set(r.recipientId, contacts[i].id));
 
-  private async processBatch(
-    batch: Contact[],
-    templates: Template[],
-    defaultTemplateId: string | null,
-    hasAttachment: boolean,
-    batchIndex: number,
-    results: ProcessingResult[],
-    onProgress: (results: ProcessingResult[]) => void,
-  ): Promise<string[]> {
-    const createdMessageIds: string[] = [];
-
-    try {
-      // Mark contacts as processing
-      batch.forEach((contact) => {
-        const result = results.find((r) => r.contactId === contact.id);
-        if (result) {
-          result.status = "processing";
-        }
-      });
-      onProgress([...results]);
-
-      // Prepare draft data
-      const drafts = batch.map((contact, index) => {
-        const activeId = contact.templateId || defaultTemplateId;
-        const activeTemplate =
-          templates.find((t) => t.id === activeId) || templates[0];
-        const parsedTemplate = parseTemplateSections(activeTemplate.content);
-
-        const selectedSubjectTemplate = getSubjectForContactIndex(activeTemplate, index);
-
-        const toTemplate = parsedTemplate.to || "";
-        const bodyTemplate = parsedTemplate.body || activeTemplate.content;
-
-        const subject = mergeTemplate(selectedSubjectTemplate, contact).trim();
-        const rawBody = mergeTemplate(bodyTemplate, contact);
-        const body = formatEmailBodyHtml(rawBody);
-
-        const mergedRecipients = mergeTemplate(toTemplate, contact).trim();
-
-        const toEmails = this.parseRecipients(mergedRecipients);
-        const resolvedRecipients =
-          toEmails.length > 0 ? toEmails : [contact.email].filter(Boolean);
-
-        return {
-          subject,
-          body,
-          toEmails: resolvedRecipients,
-          ccEmails: this.DEFAULT_CC_EMAILS,
+    const unsubscribe = window.electronAPI.onDispatchProgress(runId, (event) => {
+      const contactId = recipientToContactId.get(event.result.recipientId);
+      if (!contactId) return;
+      const idx = results.findIndex((r) => r.contactId === contactId);
+      if (idx < 0) return;
+      if (event.result.ok) {
+        results[idx] = {
+          ...results[idx],
+          status: sendOptions.mode === "draft" ? "completed" : "completed",
+          messageId: event.result.messageId,
         };
-      });
-
-      // Create drafts in batch
-      const batchResults = await this.graphService.createBatchDrafts(drafts);
-
-      // Update results
-      batch.forEach((contact, index) => {
-        const result = results.find((r) => r.contactId === contact.id);
-        const batchResult = batchResults[index];
-
-        if (result && batchResult) {
-          if (batchResult.success) {
-            result.status = hasAttachment ? "drafted" : "completed";
-            result.messageId = batchResult.id;
-            createdMessageIds.push(batchResult.id);
-          } else {
-            result.status = "failed";
-            result.error = batchResult.error || "Unknown error";
-          }
-        }
-      });
-
-      onProgress([...results]);
-      return createdMessageIds;
-    } catch (error) {
-      console.error(`Batch ${batchIndex} processing failed:`, error);
-
-      // Mark all contacts in this batch as failed
-      batch.forEach((contact) => {
-        const result = results.find((r) => r.contactId === contact.id);
-        if (result) {
-          result.status = "failed";
-          result.error =
-            error instanceof Error ? error.message : "Batch processing failed";
-        }
-      });
-
-      onProgress([...results]);
-      return [];
-    }
-  }
-
-  private async attachFilesToDrafts(
-    messageIds: string[],
-    attachment: File,
-    results: ProcessingResult[],
-    onProgress: (results: ProcessingResult[]) => void,
-  ): Promise<void> {
-    if (messageIds.length === 0) return;
-
-    for (const messageId of messageIds) {
-      let retryCount = 0;
-      const maxRetries = 3;
-
-      while (retryCount <= maxRetries) {
-        try {
-          const result = results.find((r) => r.messageId === messageId);
-          if (result && result.status === "drafted") {
-            result.status = "attaching";
-            onProgress([...results]);
-          }
-
-          // Dynamic delay: 250ms for first attempt to yield Exchange DB indexing, 3s-9s for retries
-          await new Promise(resolve => setTimeout(resolve, retryCount === 0 ? 250 : retryCount * 3000));
-
-          await this.attachmentHandler.attachFileToDraft(messageId, attachment);
-
-          if (result && result.status === "attaching") {
-            result.status = "completed";
-            onProgress([...results]);
-          }
-
-          break; // Exit retry loop on success
-        } catch (error) {
-          console.error(`Attachment failed for message ${messageId} (Attempt ${retryCount + 1}):`, error);
-          retryCount++;
-
-          if (retryCount > maxRetries) {
-            const result = results.find((r) => r.messageId === messageId);
-            if (result) {
-              result.status = "failed";
-              result.error = error instanceof Error ? error.message : "Attachment failed";
-              onProgress([...results]);
-            }
-            break;
-          }
-        }
+      } else {
+        results[idx] = { ...results[idx], status: "failed", error: event.result.error };
       }
-    }
-  }
+      onProgress([...results]);
+    });
 
-  private parseRecipients(input: string): string[] {
-    if (!input) return [];
-    return input
-      .split(/[;,]+/)
-      .flatMap((part) => part.split(/\s+/))
-      .map((value) => value.trim())
-      .filter(Boolean);
+    contacts.forEach((c) => {
+      const idx = results.findIndex((r) => r.contactId === c.id);
+      if (idx >= 0) results[idx].status = "processing";
+    });
+    onProgress([...results]);
+
+    try {
+      await window.electronAPI.dispatchRun({
+        runId,
+        recipients,
+        attachment: attachmentPayload,
+        mode: sendOptions.mode,
+        staggerSeconds: sendOptions.staggerSeconds,
+        scheduledForIso: sendOptions.scheduledForIso,
+        identityEmail: activeAccountEmail || undefined,
+      });
+    } finally {
+      unsubscribe();
+    }
+
+    return runId;
   }
 
   async getOperationStatus(_operationId: string): Promise<ProcessingResult[]> {
-    // In a real implementation, this would query the database
-    // For now, return empty array
     return [];
   }
 
@@ -301,7 +185,6 @@ export class BatchProcessor {
     _attachment: File | null,
     _onProgress: (results: ProcessingResult[]) => void,
   ): Promise<void> {
-    // Implementation for retrying failed contacts
     console.log("Retrying failed contacts:", failedResults.length);
   }
 }
