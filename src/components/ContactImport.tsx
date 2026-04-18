@@ -12,7 +12,7 @@ import { projectStore, StoredTemplate } from "../services/projectStore";
 import { validateContacts as sharedValidateContacts } from "../utils/contactValidation";
 import { trimAllFields, dedupeByEmail, filterValidEmails, extractFirstNames } from "../utils/contactTransforms";
 import { guessEmail } from "../utils/emailPatterns";
-import { getPattern, getDomain, learnFromContacts } from "../services/emailPatternStore";
+import { getDomain, learnFromContacts } from "../services/emailPatternStore";
 import { ColumnMapper } from "./ColumnMapper";
 
 interface Contact {
@@ -26,13 +26,11 @@ interface Contact {
 interface ContactImportProps {
   onContactsImported: (contacts: Contact[]) => void;
   onBack: () => void;
-  campaignId?: string;
 }
 
 export const ContactImport: React.FC<ContactImportProps> = ({
   onContactsImported,
   onBack,
-  campaignId,
 }) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(false);

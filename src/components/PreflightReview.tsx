@@ -3,7 +3,6 @@ import {
   mergeTemplate,
   parseTemplateSections,
   validateTemplate,
-  DEFAULT_SUBJECTS,
   formatEmailBodyHtml,
   getSubjectsForTemplate,
   getSubjectForContactIndex,

@@ -75,6 +75,9 @@ export class TokenManager {
 
   async logout(): Promise<void> {
     try {
+      if (!window.electronAPI?.logout) {
+        throw new Error('Electron API unavailable');
+      }
       await window.electronAPI.logout();
       this.graphService = new GraphClientService();
     } catch (error) {

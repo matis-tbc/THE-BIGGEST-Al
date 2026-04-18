@@ -244,19 +244,6 @@ function App() {
     }
   };
 
-  const startNewCampaign = () => {
-    setAppState((prev) => ({
-      ...prev,
-      currentStep: "contacts",
-      contacts: [],
-      template: null,
-      attachment: null,
-      operationId: null,
-      results: [],
-      activeCampaignId: null,
-    }));
-  };
-
   const handleTemplateSelected = async (template: Template) => {
     console.info("[App] Template selected:", template.id);
 
@@ -693,7 +680,6 @@ function App() {
 
           {appState.currentStep === "campaign-contacts" && appState.activeCampaignId && (
             <ContactImport
-              campaignId={appState.activeCampaignId}
               onContactsImported={handleContactsImported}
               onBack={backToCampaignDetail}
             />

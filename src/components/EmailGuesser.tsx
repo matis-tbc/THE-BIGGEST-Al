@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import type { EmailGuess, BacktestResult } from "../utils/emailPatterns";
+import type { BacktestResult } from "../utils/emailPatterns";
 
 interface Contact {
   id: string;

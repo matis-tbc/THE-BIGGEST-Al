@@ -177,12 +177,10 @@ export function learnFromContacts(
   return { updated, newDomains };
 }
 
-// Get known contacts for a domain from pattern store
-// (for use as training data when the original contacts aren't loaded)
+// The pattern store doesn't keep raw contacts (privacy); callers that need
+// training data should re-pass the imported CSV. Kept for API stability.
 export function getKnownContactsForDomain(
-  domain: string,
+  _domain: string,
 ): { name: string; email: string }[] | null {
-  // The pattern store doesn't store individual contacts (privacy),
-  // just the detected pattern. For guessing, the pattern is sufficient.
   return null;
 }
