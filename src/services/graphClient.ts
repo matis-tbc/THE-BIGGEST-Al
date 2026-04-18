@@ -1,5 +1,5 @@
-import { Client } from '@microsoft/microsoft-graph-client';
-import { AuthenticationProvider } from '@microsoft/microsoft-graph-client';
+import { Client } from "@microsoft/microsoft-graph-client";
+import type { AuthenticationProvider } from "@microsoft/microsoft-graph-client";
 
 interface StoredTokens {
   accessToken: string;
@@ -27,7 +27,7 @@ export class GraphClientService {
 
   async refreshTokens(): Promise<StoredTokens> {
     if (!this.tokens?.refreshToken) {
-      throw new Error('No refresh token available');
+      throw new Error("No refresh token available");
     }
 
     try {
@@ -36,74 +36,89 @@ export class GraphClientService {
       this.tokens = newTokens;
       return newTokens;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+      console.error("Token refresh failed:", error);
       throw error;
     }
   }
 
-  async createDraft(subject: string, body: string, toEmails: string[], ccEmails: string[] = []): Promise<string> {
+  async createDraft(
+    subject: string,
+    body: string,
+    toEmails: string[],
+    ccEmails: string[] = [],
+  ): Promise<string> {
     try {
-      const recipients = toEmails.map(address => ({
-        emailAddress: { address }
+      const recipients = toEmails.map((address) => ({
+        emailAddress: { address },
       }));
 
-      const ccRecipients = ccEmails.map(address => ({
-        emailAddress: { address }
+      const ccRecipients = ccEmails.map((address) => ({
+        emailAddress: { address },
       }));
 
       const message: any = {
         subject,
         body: {
-          contentType: 'HTML',
-          content: body
+          contentType: "HTML",
+          content: body,
         },
-        toRecipients: recipients
+        toRecipients: recipients,
       };
 
       if (ccRecipients.length > 0) {
         message.ccRecipients = ccRecipients;
       }
 
-      const response = await this.client.api('/me/messages').post(message);
+      const response = await this.client.api("/me/messages").post(message);
       return response.id;
     } catch (error) {
-      console.error('Draft creation failed:', error);
+      console.error("Draft creation failed:", error);
       throw error;
     }
   }
 
-  async createUploadSession(messageId: string, fileName: string, fileSize: number): Promise<string> {
+  async createUploadSession(
+    messageId: string,
+    fileName: string,
+    fileSize: number,
+  ): Promise<string> {
     try {
       const response = await this.client
         .api(`/me/messages/${messageId}/attachments/createUploadSession`)
         .post({
           AttachmentItem: {
-            attachmentType: 'file',
+            attachmentType: "file",
             name: fileName,
-            size: fileSize
-          }
+            size: fileSize,
+          },
         });
 
       return response.uploadUrl;
     } catch (error) {
-      console.error('Upload session creation failed:', error);
+      console.error("Upload session creation failed:", error);
       throw error;
     }
   }
 
-  async uploadFileChunk(uploadUrl: string, chunk: ArrayBuffer, rangeStart: number, rangeEnd: number, totalSize: number): Promise<void> {
+  async uploadFileChunk(
+    uploadUrl: string,
+    chunk: ArrayBuffer,
+    rangeStart: number,
+    rangeEnd: number,
+    totalSize: number,
+  ): Promise<void> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout to prevent hanging connections
 
     try {
       const response = await fetch(uploadUrl, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Length': (rangeEnd - rangeStart + 1).toString(),
-          'Content-Range': `bytes ${rangeStart}-${rangeEnd}/${totalSize}`,
+          "Content-Length": (rangeEnd - rangeStart + 1).toString(),
+          "Content-Range": `bytes ${rangeStart}-${rangeEnd}/${totalSize}`,
         },
         body: chunk,
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       clearTimeout(timeout);
@@ -113,25 +128,32 @@ export class GraphClientService {
       }
     } catch (error) {
       clearTimeout(timeout);
-      console.error('Chunk upload failed:', error);
+      console.error("Chunk upload failed:", error);
       throw error;
     }
   }
 
-  async createBatchDrafts(drafts: Array<{ subject: string, body: string, toEmails: string[], ccEmails?: string[] }>): Promise<Array<{ id: string, success: boolean, error?: string }>> {
-    const results: Array<{ id: string, success: boolean, error?: string }> = [];
+  async createBatchDrafts(
+    drafts: Array<{ subject: string; body: string; toEmails: string[]; ccEmails?: string[] }>,
+  ): Promise<Array<{ id: string; success: boolean; error?: string }>> {
+    const results: Array<{ id: string; success: boolean; error?: string }> = [];
 
     // Execute strictly sequentially to avoid Microsoft Graph MailboxConcurrency throttling (limit: 4 concurrent)
     for (const draft of drafts) {
       try {
-        const id = await this.createDraft(draft.subject, draft.body, draft.toEmails, draft.ccEmails);
+        const id = await this.createDraft(
+          draft.subject,
+          draft.body,
+          draft.toEmails,
+          draft.ccEmails,
+        );
         results.push({ id, success: true });
       } catch (error: any) {
         // We capture individual failures to not break the entire batch flow
         results.push({
-          id: '',
+          id: "",
           success: false,
-          error: error.message || 'Failed to create draft'
+          error: error.message || "Failed to create draft",
         });
       }
     }
@@ -139,32 +161,32 @@ export class GraphClientService {
     return results;
   }
 
-  async getUserInfo(): Promise<{ displayName: string, mail: string }> {
+  async getUserInfo(): Promise<{ displayName: string; mail: string }> {
     try {
-      const response = await this.client.api('/me').get();
+      const response = await this.client.api("/me").get();
       return {
         displayName: response.displayName,
-        mail: response.mail || response.userPrincipalName
+        mail: response.mail || response.userPrincipalName,
       };
     } catch (error) {
-      console.error('Get user info failed:', error);
+      console.error("Get user info failed:", error);
       throw error;
     }
   }
 }
 
 class CustomAuthProvider implements AuthenticationProvider {
-  constructor(private graphService: GraphClientService) { }
+  constructor(private graphService: GraphClientService) {}
 
   async getAccessToken(): Promise<string> {
     const tokens = await this.graphService.getTokens();
     if (!tokens) {
-      throw new Error('No tokens available');
+      throw new Error("No tokens available");
     }
 
     // Check if token is expired (with 5 minute buffer)
     const bufferTime = 5 * 60 * 1000; // 5 minutes
-    if (Date.now() >= (tokens.expiresAt - bufferTime)) {
+    if (Date.now() >= tokens.expiresAt - bufferTime) {
       // Token is expired or about to expire, refresh it
       const newTokens = await this.graphService.refreshTokens();
       return newTokens.accessToken;

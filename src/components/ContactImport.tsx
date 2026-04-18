@@ -1,16 +1,21 @@
 import { useEffect, useState, useRef } from "react";
 import {
   parseCSV,
-  ParsedContact,
+  type ParsedContact,
   validateEmail,
   isHeaderRow,
   inferColumnTypes,
   parseCSVLine,
 } from "../utils/csvParser";
 import type { ColumnInference } from "../utils/csvParser";
-import { projectStore, StoredTemplate } from "../services/projectStore";
+import { projectStore, type StoredTemplate } from "../services/projectStore";
 import { validateContacts as sharedValidateContacts } from "../utils/contactValidation";
-import { trimAllFields, dedupeByEmail, filterValidEmails, extractFirstNames } from "../utils/contactTransforms";
+import {
+  trimAllFields,
+  dedupeByEmail,
+  filterValidEmails,
+  extractFirstNames,
+} from "../utils/contactTransforms";
 import { guessEmail } from "../utils/emailPatterns";
 import { getDomain, learnFromContacts } from "../services/emailPatternStore";
 import { ColumnMapper } from "./ColumnMapper";
@@ -28,10 +33,7 @@ interface ContactImportProps {
   onBack: () => void;
 }
 
-export const ContactImport: React.FC<ContactImportProps> = ({
-  onContactsImported,
-  onBack,
-}) => {
+export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported, onBack }) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,13 +112,20 @@ export const ContactImport: React.FC<ContactImportProps> = ({
       for (const [k, v] of Object.entries(rest)) {
         if (v !== null && v !== undefined) {
           cleanRest[k] = String(v);
-          if (k.toLowerCase() === 'template' && !mappedTemplateId && typeof v === 'string' && v.trim()) {
+          if (
+            k.toLowerCase() === "template" &&
+            !mappedTemplateId &&
+            typeof v === "string" &&
+            v.trim()
+          ) {
             const searchLower = v.trim().toLowerCase();
-            const found = currentTemplates.find(t => {
+            const found = currentTemplates.find((t) => {
               const templateLower = t.name.toLowerCase();
-              return templateLower === searchLower ||
+              return (
+                templateLower === searchLower ||
                 templateLower.includes(searchLower) ||
-                searchLower.includes(templateLower);
+                searchLower.includes(templateLower)
+              );
             });
             if (found) mappedTemplateId = found.id;
           }
@@ -135,9 +144,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     revalidate(normalizedContacts);
 
     // Auto-learn email patterns from imported contacts
-    const validForLearning = normalizedContacts.filter(
-      (c) => c.email && c.email.includes("@"),
-    );
+    const validForLearning = normalizedContacts.filter((c) => c.email?.includes("@"));
     if (validForLearning.length > 0) {
       const result = learnFromContacts(validForLearning);
       if (result.updated > 0) {
@@ -152,9 +159,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     }
   };
 
-  const handleFileSelect = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -181,7 +186,10 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     setValidationErrors([]);
 
     // Detect delimiter and split into rows
-    const lines = pastedText.trim().split("\n").filter((l) => l.trim());
+    const lines = pastedText
+      .trim()
+      .split("\n")
+      .filter((l) => l.trim());
     if (lines.length === 0) return;
 
     const tabCount = (lines[0].match(/\t/g) || []).length;
@@ -373,7 +381,9 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     revalidate(next);
   };
 
-  const applyBulkAction = (action: "trim" | "dedupe" | "invalid-only" | "extract-first-name" | "guess-emails") => {
+  const applyBulkAction = (
+    action: "trim" | "dedupe" | "invalid-only" | "extract-first-name" | "guess-emails",
+  ) => {
     let next = [...contacts];
     if (action === "trim") next = trimAllFields(next);
     if (action === "dedupe") next = dedupeByEmail(next);
@@ -382,7 +392,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     if (action === "guess-emails") {
       // Build known contacts from those that already have emails
       const known = next
-        .filter((c) => c.email && c.email.includes("@"))
+        .filter((c) => c.email?.includes("@"))
         .map((c) => ({ name: c.name, email: c.email }));
 
       next = next.map((c) => {
@@ -432,9 +442,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const validCount = contacts.filter((contact) =>
-    validateEmail(contact.email),
-  ).length;
+  const validCount = contacts.filter((contact) => validateEmail(contact.email)).length;
   const mappedCount = contacts.filter((contact) => !!contact.templateId).length;
   const isFullyMapped = contacts.length > 0 && mappedCount === contacts.length;
 
@@ -456,9 +464,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
 
   const handleContinueWithCurrentData = () => {
     if (validCount > 0) {
-      onContactsImported(
-        contacts.filter((contact) => validateEmail(contact.email)),
-      );
+      onContactsImported(contacts.filter((contact) => validateEmail(contact.email)));
     }
   };
 
@@ -487,8 +493,8 @@ export const ContactImport: React.FC<ContactImportProps> = ({
       <div>
         <h2 className="text-2xl font-bold text-white mb-2">Import Contacts</h2>
         <p className="text-slate-400">
-          Upload a CSV file with your contact list. Include columns for name,
-          email, and any merge fields.
+          Upload a CSV file with your contact list. Include columns for name, email, and any merge
+          fields.
         </p>
       </div>
 
@@ -523,9 +529,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                 disabled={isLoading}
               />
             </label>
-            <p className="mt-1 text-sm text-slate-500">
-              CSV files only, up to 10MB
-            </p>
+            <p className="mt-1 text-sm text-slate-500">CSV files only, up to 10MB</p>
           </div>
         </div>
       </div>
@@ -577,11 +581,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
         <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-rose-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
+              <svg className="h-5 w-5 text-rose-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
                   d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -601,11 +601,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-yellow-500"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
+              <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
                   d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
@@ -614,9 +610,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-600">
-                Validation Warnings
-              </h3>
+              <h3 className="text-sm font-medium text-yellow-600">Validation Warnings</h3>
               <div className="mt-2 text-sm text-yellow-600/80">
                 <ul className="list-disc list-inside space-y-1">
                   {validationErrors.slice(0, 5).map((error, index) => (
@@ -634,15 +628,13 @@ export const ContactImport: React.FC<ContactImportProps> = ({
 
       {/* Contacts Preview */}
       {contacts.length > 0 && (
-        <div className={`border rounded-xl p-4 ${isFullyMapped ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
+        <div
+          className={`border rounded-xl p-4 ${isFullyMapped ? "bg-emerald-500/10 border-emerald-500/20" : "bg-yellow-500/10 border-yellow-500/20"}`}
+        >
           <div className="flex">
             <div className="flex-shrink-0">
               {isFullyMapped ? (
-                <svg
-                  className="h-5 w-5 text-emerald-400"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
+                <svg className="h-5 w-5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
                   <path
                     fillRule="evenodd"
                     d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
@@ -650,11 +642,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                   />
                 </svg>
               ) : (
-                <svg
-                  className="h-5 w-5 text-yellow-500"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
+                <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
                   <path
                     fillRule="evenodd"
                     d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
@@ -664,14 +652,25 @@ export const ContactImport: React.FC<ContactImportProps> = ({
               )}
             </div>
             <div className="ml-3">
-              <h3 className={`text-sm font-medium ${isFullyMapped ? 'text-emerald-500' : 'text-yellow-600'}`}>
+              <h3
+                className={`text-sm font-medium ${isFullyMapped ? "text-emerald-500" : "text-yellow-600"}`}
+              >
                 {validCount} valid contacts | {mappedCount}/{contacts.length} Templates Mapped
               </h3>
-              <div className={`mt-2 text-sm ${isFullyMapped ? 'text-emerald-500/80' : 'text-yellow-600/80'}`}>
-                {isFullyMapped
-                  ? <p>All contacts have an assigned template. You can bypass the Template Manager directly!</p>
-                  : <p>Some contacts are missing a template assignment. They will be routed to the fallback template selector next.</p>
-                }
+              <div
+                className={`mt-2 text-sm ${isFullyMapped ? "text-emerald-500/80" : "text-yellow-600/80"}`}
+              >
+                {isFullyMapped ? (
+                  <p>
+                    All contacts have an assigned template. You can bypass the Template Manager
+                    directly!
+                  </p>
+                ) : (
+                  <p>
+                    Some contacts are missing a template assignment. They will be routed to the
+                    fallback template selector next.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -686,22 +685,59 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                 <h3 className="text-sm font-medium text-slate-200">CSV Editor</h3>
                 {selectedRows.size > 0 && (
                   <div className="flex items-center gap-2 bg-yellow-500/10 px-3 py-1.5 rounded-lg border border-yellow-500/20">
-                    <span className="text-xs text-yellow-500 font-medium">{selectedRows.size} selected</span>
-                    <select value={bulkEditField} onChange={e => setBulkEditField(e.target.value)} className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500">
+                    <span className="text-xs text-yellow-500 font-medium">
+                      {selectedRows.size} selected
+                    </span>
+                    <select
+                      value={bulkEditField}
+                      onChange={(e) => setBulkEditField(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500"
+                    >
                       <option value="">Edit field...</option>
-                      {headers.filter(h => h !== 'id').map(h => <option key={h} value={h}>{h}</option>)}
+                      {headers
+                        .filter((h) => h !== "id")
+                        .map((h) => (
+                          <option key={h} value={h}>
+                            {h}
+                          </option>
+                        ))}
                       <option value="templateId">Template</option>
                     </select>
                     {bulkEditField === "templateId" ? (
-                      <select value={bulkEditValue} onChange={e => setBulkEditValue(e.target.value)} className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500 max-w-[150px]">
+                      <select
+                        value={bulkEditValue}
+                        onChange={(e) => setBulkEditValue(e.target.value)}
+                        className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500 max-w-[150px]"
+                      >
                         <option value="">(Unmapped) Catch-all</option>
-                        {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        {templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
                       </select>
                     ) : (
-                      <input value={bulkEditValue} onChange={e => setBulkEditValue(e.target.value)} placeholder="New value" className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500 w-32" disabled={!bulkEditField} />
+                      <input
+                        value={bulkEditValue}
+                        onChange={(e) => setBulkEditValue(e.target.value)}
+                        placeholder="New value"
+                        className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300 focus:border-yellow-500 focus:ring-yellow-500 w-32"
+                        disabled={!bulkEditField}
+                      />
                     )}
-                    <button onClick={applyFieldBulkEdit} disabled={!bulkEditField} className="bg-yellow-500 text-yellow-950 text-xs font-semibold px-2 py-1 rounded hover:bg-yellow-400 disabled:opacity-50 transition-colors">Apply</button>
-                    <button onClick={() => setSelectedRows(new Set())} className="bg-slate-700 text-slate-300 text-xs font-semibold px-2 py-1 rounded hover:bg-slate-600 transition-colors">Deselect</button>
+                    <button
+                      onClick={applyFieldBulkEdit}
+                      disabled={!bulkEditField}
+                      className="bg-yellow-500 text-yellow-950 text-xs font-semibold px-2 py-1 rounded hover:bg-yellow-400 disabled:opacity-50 transition-colors"
+                    >
+                      Apply
+                    </button>
+                    <button
+                      onClick={() => setSelectedRows(new Set())}
+                      className="bg-slate-700 text-slate-300 text-xs font-semibold px-2 py-1 rounded hover:bg-slate-600 transition-colors"
+                    >
+                      Deselect
+                    </button>
                   </div>
                 )}
               </div>
@@ -736,26 +772,27 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                 >
                   Guess emails
                 </button>
-                <button
-                  onClick={exportCorrectedCsv}
-                  className="btn-secondary text-xs !py-1.5"
-                >
+                <button onClick={exportCorrectedCsv} className="btn-secondary text-xs !py-1.5">
                   Export corrected CSV
                 </button>
-                <button
-                  onClick={handleAddRow}
-                  className="btn-secondary text-xs !py-1.5"
-                >
+                <button onClick={handleAddRow} className="btn-secondary text-xs !py-1.5">
                   Add row
                 </button>
               </div>
             </div>
           </div>
-          <div ref={tableContainerRef} className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] relative">
+          <div
+            ref={tableContainerRef}
+            className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] relative"
+          >
             <table className="min-w-max divide-y divide-slate-700">
               <thead className="sticky top-0 bg-slate-800 z-20 shadow-sm">
                 <tr>
-                  <th className="px-3 py-3 w-10 sticky left-0 bg-slate-800 z-30 shadow-[1px_0_0_0_#334155] cursor-pointer" onClick={toggleAllRows} title="Toggle All">
+                  <th
+                    className="px-3 py-3 w-10 sticky left-0 bg-slate-800 z-30 shadow-[1px_0_0_0_#334155] cursor-pointer"
+                    onClick={toggleAllRows}
+                    title="Toggle All"
+                  >
                     <div className="w-4 h-4 rounded border-2 mx-auto flex items-center justify-center transition-colors border-slate-500 hover:border-slate-400">
                       {selectedRows.size > 0 && selectedRows.size === contacts.length && (
                         <div className="w-2 h-2 bg-yellow-400 rounded-sm"></div>
@@ -766,9 +803,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                     </div>
                   </th>
                   {headers
-                    .filter(
-                      (header) => header !== "id" && header !== "templateId",
-                    )
+                    .filter((header) => header !== "id" && header !== "templateId")
                     .map((header) => (
                       <th
                         key={header}
@@ -792,41 +827,35 @@ export const ContactImport: React.FC<ContactImportProps> = ({
               </thead>
               <tbody className="bg-transparent divide-y divide-slate-700/50">
                 {contacts.map((contact) => (
-                  <tr
-                    key={contact.id}
-                    className="hover:bg-slate-800/30 transition-colors group"
-                  >
+                  <tr key={contact.id} className="hover:bg-slate-800/30 transition-colors group">
                     <td
-                      className={`px-3 py-2 w-10 sticky left-0 z-10 shadow-[2px_0_0_0_#334155] cursor-col-resize select-none transition-colors ${selectedRows.has(contact.id) ? 'bg-yellow-500/20' : 'bg-slate-900'}`}
+                      className={`px-3 py-2 w-10 sticky left-0 z-10 shadow-[2px_0_0_0_#334155] cursor-col-resize select-none transition-colors ${selectedRows.has(contact.id) ? "bg-yellow-500/20" : "bg-slate-900"}`}
                       onMouseDown={(e) => handleRowMouseDown(contact.id, e)}
                       onMouseEnter={() => handleRowMouseEnter(contact.id)}
                     >
-                      <div className={`w-4 h-4 mx-auto rounded border-2 flex items-center justify-center transition-colors ${selectedRows.has(contact.id) ? 'border-yellow-500 bg-yellow-500/20' : 'border-slate-600 group-hover:border-slate-500'}`}>
-                        {selectedRows.has(contact.id) && <div className="w-2 h-2 bg-yellow-500 rounded-sm"></div>}
+                      <div
+                        className={`w-4 h-4 mx-auto rounded border-2 flex items-center justify-center transition-colors ${selectedRows.has(contact.id) ? "border-yellow-500 bg-yellow-500/20" : "border-slate-600 group-hover:border-slate-500"}`}
+                      >
+                        {selectedRows.has(contact.id) && (
+                          <div className="w-2 h-2 bg-yellow-500 rounded-sm"></div>
+                        )}
                       </div>
                     </td>
                     {headers
-                      .filter(
-                        (header) => header !== "id" && header !== "templateId",
-                      )
+                      .filter((header) => header !== "id" && header !== "templateId")
                       .map((header) => (
                         <td key={header} className="px-5 py-2 text-sm whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <input
                               value={contact[header] || ""}
                               onChange={(event) =>
-                                handleCellChange(
-                                  contact.id,
-                                  header,
-                                  event.target.value,
-                                )
+                                handleCellChange(contact.id, header, event.target.value)
                               }
-                              className={`input-field !py-1.5 ${header === "email" &&
-                                contact.email &&
-                                !validateEmail(contact.email)
-                                ? "!border-rose-500/50 !bg-rose-500/10"
-                                : ""
-                                }`}
+                              className={`input-field !py-1.5 ${
+                                header === "email" && contact.email && !validateEmail(contact.email)
+                                  ? "!border-rose-500/50 !bg-rose-500/10"
+                                  : ""
+                              }`}
                             />
                           </div>
                         </td>
@@ -841,14 +870,8 @@ export const ContactImport: React.FC<ContactImportProps> = ({
                     <td className="px-5 py-3 text-sm font-medium">
                       <select
                         value={contact.templateId || ""}
-                        onChange={(e) =>
-                          handleCellChange(
-                            contact.id,
-                            "templateId",
-                            e.target.value,
-                          )
-                        }
-                        className={`bg-slate-900 border text-xs rounded-lg block w-full p-2 ${!contact.templateId ? 'border-yellow-500/50 focus:ring-yellow-500 focus:border-yellow-500 text-yellow-200' : 'border-slate-700 focus:ring-emerald-500 text-slate-300 focus:border-emerald-500'}`}
+                        onChange={(e) => handleCellChange(contact.id, "templateId", e.target.value)}
+                        className={`bg-slate-900 border text-xs rounded-lg block w-full p-2 ${!contact.templateId ? "border-yellow-500/50 focus:ring-yellow-500 focus:border-yellow-500 text-yellow-200" : "border-slate-700 focus:ring-emerald-500 text-slate-300 focus:border-emerald-500"}`}
                       >
                         <option value="">(Unmapped) Catch-all</option>
                         {templates.map((t) => (

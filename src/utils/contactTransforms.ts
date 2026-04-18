@@ -45,10 +45,7 @@ export function extractFirstNames(contacts: Contact[]): Contact[] {
     const rec = updated as Record<string, string | null | undefined>;
     Object.keys(rec).forEach((key) => {
       const lk = key.toLowerCase().replace(/[^a-z]/g, "");
-      if (
-        (lk === "name" || lk === "firstname" || lk === "fullname") &&
-        key !== "id"
-      ) {
+      if ((lk === "name" || lk === "firstname" || lk === "fullname") && key !== "id") {
         const val = ((rec[key] as string) || "").trim();
         if (val) rec[key] = val.split(/\s+/)[0];
       }

@@ -1,4 +1,4 @@
-import { teamStore } from '../services/teamStore';
+import { teamStore } from "../services/teamStore";
 
 export interface ParsedContact {
   name?: string;
@@ -60,10 +60,7 @@ export function inferColumnTypes(rows: string[][]): ColumnInference[] {
       suggestedHeader = "";
     }
     // 2. email: most values contain @
-    else if (
-      nonEmpty.filter((v) => v.includes("@")).length >
-      nonEmpty.length * 0.8
-    ) {
+    else if (nonEmpty.filter((v) => v.includes("@")).length > nonEmpty.length * 0.8) {
       inferredType = "email";
       confidence = 0.95;
       suggestedHeader = "email";
@@ -71,9 +68,7 @@ export function inferColumnTypes(rows: string[][]): ColumnInference[] {
     // 3. date: patterns like "8-Dec", "2/3/2026"
     else if (
       nonEmpty.filter((v) =>
-        /^\d{1,2}[/-]\w{3,}$|^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$|^\w{3,}-\d{1,2}$/i.test(
-          v,
-        ),
+        /^\d{1,2}[/-]\w{3,}$|^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$|^\w{3,}-\d{1,2}$/i.test(v),
       ).length >
       nonEmpty.length * 0.5
     ) {
@@ -92,24 +87,17 @@ export function inferColumnTypes(rows: string[][]): ColumnInference[] {
     } else {
       const unique = new Set(nonEmpty.map((v) => v.toLowerCase()));
       const uniqueRatio = unique.size / nonEmpty.length;
-      const avgLength =
-        nonEmpty.reduce((s, v) => s + v.length, 0) / nonEmpty.length;
+      const avgLength = nonEmpty.reduce((s, v) => s + v.length, 0) / nonEmpty.length;
 
       const titleWords =
         /\b(representative|manager|director|engineer|specialist|vp|president|analyst|associate|coordinator|lead|senior|sr\.?|assistant|executive|officer|supervisor|sales|marketing|business|development)\b/i;
       const titleMatches = nonEmpty.filter((v) => titleWords.test(v)).length;
 
-      const memberLike = nonEmpty.filter(
-        (v) => /^[A-Za-z]+$/.test(v) && v.length < 15,
-      );
+      const memberLike = nonEmpty.filter((v) => /^[A-Za-z]+$/.test(v) && v.length < 15);
 
-      const hasOutreach = nonEmpty.some((v) =>
-        /outreach|campaign|monetary|in-kind/i.test(v),
-      );
+      const hasOutreach = nonEmpty.some((v) => /outreach|campaign|monetary|in-kind/i.test(v));
       const capitalizedCount = nonEmpty.filter((v) => /^[A-Z]/.test(v)).length;
-      const isDocLink = nonEmpty.some((v) =>
-        /google docs|docs\.google|https?:|\.com\b/i.test(v),
-      );
+      const isDocLink = nonEmpty.some((v) => /google docs|docs\.google|https?:|\.com\b/i.test(v));
 
       // 1. Doc/URL columns -> skip as notes
       if (isDocLink && !usedTypes.has("docLink")) {
@@ -124,10 +112,7 @@ export function inferColumnTypes(rows: string[][]): ColumnInference[] {
         suggestedHeader = "Campaign";
       }
       // 3. Title words
-      else if (
-        titleMatches > nonEmpty.length * 0.4 &&
-        !usedTypes.has("title")
-      ) {
+      else if (titleMatches > nonEmpty.length * 0.4 && !usedTypes.has("title")) {
         inferredType = "title";
         confidence = 0.85;
         suggestedHeader = "Title";
@@ -203,9 +188,7 @@ export function inferColumnTypes(rows: string[][]): ColumnInference[] {
   // Fallback: if no name column was found, pick first unknown with spaces
   if (!results.some((r) => r.inferredType === "name")) {
     const candidate = results.find(
-      (r) =>
-        r.inferredType === "unknown" &&
-        r.sampleValues.some((v) => v.includes(" ")),
+      (r) => r.inferredType === "unknown" && r.sampleValues.some((v) => v.includes(" ")),
     );
     if (candidate) {
       candidate.inferredType = "name";
@@ -218,23 +201,23 @@ export function inferColumnTypes(rows: string[][]): ColumnInference[] {
 }
 
 export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
-  const lines = csvText.trim().split('\n');
+  const lines = csvText.trim().split("\n");
   if (lines.length < 2) {
-    throw new Error('CSV must have at least a header row and one data row');
+    throw new Error("CSV must have at least a header row and one data row");
   }
 
   const tabCount = (lines[0].match(/\t/g) || []).length;
   const commaCount = (lines[0].match(/,/g) || []).length;
-  const delimiter = tabCount > commaCount ? '\t' : ',';
+  const delimiter = tabCount > commaCount ? "\t" : ",";
 
   // Parse header row
   const headers = parseCSVLine(lines[0], delimiter);
-  const emailIndex = headers.findIndex(h =>
-    h.toLowerCase().includes('email') || h.toLowerCase().includes('e-mail')
+  const emailIndex = headers.findIndex(
+    (h) => h.toLowerCase().includes("email") || h.toLowerCase().includes("e-mail"),
   );
 
   if (emailIndex === -1) {
-    throw new Error('CSV must contain an email column');
+    throw new Error("CSV must contain an email column");
   }
 
   // Fetch Team Profiles mapped for injection
@@ -254,23 +237,23 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
     }
 
     const contact: ParsedContact = {
-      email: values[emailIndex]?.trim() || ''
+      email: values[emailIndex]?.trim() || "",
     };
 
     let memberName = "";
 
     // Map all columns to contact object
     headers.forEach((headerOrig, index) => {
-      let header = headerOrig.trim();
+      const header = headerOrig.trim();
       const value = values[index]?.trim();
       if (!value) return;
 
-      const cleanHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanHeader = header.toLowerCase().replace(/[^a-z0-9]/g, "");
 
       // Normalize basic Contact fields
-      if (cleanHeader === 'member') {
+      if (cleanHeader === "member") {
         memberName = value; // Capture the sender for profile resolution
-      } else if (cleanHeader.includes('name') && !contact.name) {
+      } else if (cleanHeader.includes("name") && !contact.name) {
         contact.name = value;
       }
 
@@ -280,30 +263,30 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
 
     // Ensure we have a basic name field for the contact
     if (!contact.name) {
-      contact.name = contact.email.split('@')[0] || contact.email;
+      contact.name = contact.email.split("@")[0] || contact.email;
     }
 
     // Inject Dynamic Signature fields if the CSV defined a "Member"
     if (memberName) {
       // Find a case-insensitive match for the team member
       const searchName = memberName.toLowerCase();
-      const memberProf = teamMembers.find(m => {
+      const memberProf = teamMembers.find((m) => {
         const mName = m.name.toLowerCase();
         return mName === searchName || mName.includes(searchName) || searchName.includes(mName);
       });
       if (memberProf) {
-        contact['Sender Name'] = memberProf.name;
-        contact['Sender Role'] = memberProf.role;
-        contact['Sender Major'] = memberProf.major;
-        contact['Sender Phone'] = memberProf.phone;
-        contact['Sender Email'] = memberProf.email;
+        contact["Sender Name"] = memberProf.name;
+        contact["Sender Role"] = memberProf.role;
+        contact["Sender Major"] = memberProf.major;
+        contact["Sender Phone"] = memberProf.phone;
+        contact["Sender Email"] = memberProf.email;
       } else {
         // Fallback to literal text if no profile matched so tags don't just hang
-        contact['Sender Name'] = memberName;
-        contact['Sender Role'] = "{Setup role in Team Manager}";
-        contact['Sender Major'] = "{Setup major in Team Manager}";
-        contact['Sender Phone'] = "{Setup phone in Team Manager}";
-        contact['Sender Email'] = "{Setup email in Team Manager}";
+        contact["Sender Name"] = memberName;
+        contact["Sender Role"] = "{Setup role in Team Manager}";
+        contact["Sender Major"] = "{Setup major in Team Manager}";
+        contact["Sender Phone"] = "{Setup phone in Team Manager}";
+        contact["Sender Email"] = "{Setup email in Team Manager}";
       }
     }
 
@@ -313,9 +296,9 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
   return contacts;
 }
 
-export function parseCSVLine(line: string, delimiter: string = ','): string[] {
+export function parseCSVLine(line: string, delimiter: string = ","): string[] {
   const result: string[] = [];
-  let current = '';
+  let current = "";
   let inQuotes = false;
   let i = 0;
 
@@ -332,7 +315,7 @@ export function parseCSVLine(line: string, delimiter: string = ','): string[] {
       inQuotes = !inQuotes;
     } else if (char === delimiter && !inQuotes) {
       result.push(current.trim());
-      current = '';
+      current = "";
     } else {
       current += char;
     }
@@ -351,7 +334,12 @@ export function validateEmail(email: string): boolean {
 
 export function sanitizeCSVValue(value: string): string {
   // Remove potential formula injection
-  if (value.startsWith('=') || value.startsWith('+') || value.startsWith('-') || value.startsWith('@')) {
+  if (
+    value.startsWith("=") ||
+    value.startsWith("+") ||
+    value.startsWith("-") ||
+    value.startsWith("@")
+  ) {
     return `'${value}`;
   }
   return value;

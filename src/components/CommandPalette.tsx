@@ -1,10 +1,18 @@
-import { useEffect } from 'react';
-import { Command } from 'cmdk';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect } from "react";
+import { Command } from "cmdk";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Home, Plus, Users, Eye, LogOut, Play, Building2, FileText,
-  UserCircle, Wand2
-} from 'lucide-react';
+  Home,
+  Plus,
+  Users,
+  Eye,
+  LogOut,
+  Play,
+  Building2,
+  FileText,
+  UserCircle,
+  Wand2,
+} from "lucide-react";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -17,22 +25,27 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({
-  open, onOpenChange, onNavigate, onCreateCampaign, onSignOut,
-  activeCampaignId, onRunCampaign
+  open,
+  onOpenChange,
+  onNavigate,
+  onCreateCampaign,
+  onSignOut,
+  activeCampaignId,
+  onRunCampaign,
 }: CommandPaletteProps) {
   // Cmd+K / Ctrl+K toggle
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         onOpenChange(!open);
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         onOpenChange(false);
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [open, onOpenChange]);
 
   const runAction = (fn: () => void) => {
@@ -61,7 +74,7 @@ export function CommandPalette({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{ duration: 0.15 }}
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-lg"
           >
             <Command
@@ -84,24 +97,70 @@ export function CommandPalette({
                   No results found.
                 </Command.Empty>
 
-                <Command.Group heading="Navigation" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-slate-500">
-                  <PaletteItem icon={<Home />} label="Go to Campaigns" onSelect={() => runAction(() => onNavigate('home'))} />
-                  <PaletteItem icon={<UserCircle />} label="Manage Sender Profiles" onSelect={() => runAction(() => onNavigate('team'))} />
-                  <PaletteItem icon={<Eye />} label="Open Tunnel Playground" shortcut="visual" onSelect={() => runAction(() => onNavigate('tunnel'))} />
+                <Command.Group
+                  heading="Navigation"
+                  className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-slate-500"
+                >
+                  <PaletteItem
+                    icon={<Home />}
+                    label="Go to Campaigns"
+                    onSelect={() => runAction(() => onNavigate("home"))}
+                  />
+                  <PaletteItem
+                    icon={<UserCircle />}
+                    label="Manage Sender Profiles"
+                    onSelect={() => runAction(() => onNavigate("team"))}
+                  />
+                  <PaletteItem
+                    icon={<Eye />}
+                    label="Open Tunnel Playground"
+                    shortcut="visual"
+                    onSelect={() => runAction(() => onNavigate("tunnel"))}
+                  />
                 </Command.Group>
 
-                <Command.Group heading="Actions" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-slate-500 mt-1">
-                  <PaletteItem icon={<Plus />} label="Create New Campaign" onSelect={() => runAction(onCreateCampaign)} />
-                  <PaletteItem icon={<LogOut />} label="Sign Out" onSelect={() => runAction(onSignOut)} />
+                <Command.Group
+                  heading="Actions"
+                  className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-slate-500 mt-1"
+                >
+                  <PaletteItem
+                    icon={<Plus />}
+                    label="Create New Campaign"
+                    onSelect={() => runAction(onCreateCampaign)}
+                  />
+                  <PaletteItem
+                    icon={<LogOut />}
+                    label="Sign Out"
+                    onSelect={() => runAction(onSignOut)}
+                  />
                 </Command.Group>
 
                 {activeCampaignId && (
-                  <Command.Group heading="Current Campaign" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-slate-500 mt-1">
-                    <PaletteItem icon={<Building2 />} label="Generate Companies" onSelect={() => runAction(() => onNavigate('campaign-leadgen'))} />
-                    <PaletteItem icon={<Users />} label="Import Contacts" onSelect={() => runAction(() => onNavigate('campaign-contacts'))} />
-                    <PaletteItem icon={<FileText />} label="Select Template" onSelect={() => runAction(() => onNavigate('campaign-template'))} />
+                  <Command.Group
+                    heading="Current Campaign"
+                    className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-slate-500 mt-1"
+                  >
+                    <PaletteItem
+                      icon={<Building2 />}
+                      label="Generate Companies"
+                      onSelect={() => runAction(() => onNavigate("campaign-leadgen"))}
+                    />
+                    <PaletteItem
+                      icon={<Users />}
+                      label="Import Contacts"
+                      onSelect={() => runAction(() => onNavigate("campaign-contacts"))}
+                    />
+                    <PaletteItem
+                      icon={<FileText />}
+                      label="Select Template"
+                      onSelect={() => runAction(() => onNavigate("campaign-template"))}
+                    />
                     {onRunCampaign && (
-                      <PaletteItem icon={<Play />} label="Run Campaign" onSelect={() => runAction(onRunCampaign)} />
+                      <PaletteItem
+                        icon={<Play />}
+                        label="Run Campaign"
+                        onSelect={() => runAction(onRunCampaign)}
+                      />
                     )}
                   </Command.Group>
                 )}
@@ -114,7 +173,12 @@ export function CommandPalette({
   );
 }
 
-function PaletteItem({ icon, label, shortcut, onSelect }: {
+function PaletteItem({
+  icon,
+  label,
+  shortcut,
+  onSelect,
+}: {
   icon: React.ReactNode;
   label: string;
   shortcut?: string;
@@ -127,9 +191,7 @@ function PaletteItem({ icon, label, shortcut, onSelect }: {
     >
       <span className="h-4 w-4 shrink-0 [&>svg]:h-4 [&>svg]:w-4 opacity-60">{icon}</span>
       <span className="flex-1">{label}</span>
-      {shortcut && (
-        <span className="text-xs text-slate-600">{shortcut}</span>
-      )}
+      {shortcut && <span className="text-xs text-slate-600">{shortcut}</span>}
     </Command.Item>
   );
 }

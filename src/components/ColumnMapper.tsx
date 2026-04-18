@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import type React from "react";
+import { useState, useMemo } from "react";
 import type { ColumnInference } from "../utils/csvParser";
 
 const COLUMN_TYPE_OPTIONS = [
@@ -57,9 +58,7 @@ export const ColumnMapper: React.FC<ColumnMapperProps> = ({
 
   const updateCustomHeader = (index: number, header: string) => {
     setMappings((prev) =>
-      prev.map((m) =>
-        m.index === index ? { ...m, suggestedHeader: header } : m,
-      ),
+      prev.map((m) => (m.index === index ? { ...m, suggestedHeader: header } : m)),
     );
   };
 
@@ -95,17 +94,14 @@ export const ColumnMapper: React.FC<ColumnMapperProps> = ({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium text-white">
-            Column Mapping
-          </h3>
+          <h3 className="text-lg font-medium text-white">Column Mapping</h3>
           <p className="text-sm text-slate-400 mt-1">
-            We detected {rawRows.length} rows with no header row. Verify the
-            column assignments below.
+            We detected {rawRows.length} rows with no header row. Verify the column assignments
+            below.
           </p>
         </div>
         <span className="text-xs text-slate-500">
-          {mappings.filter((m) => m.inferredType === "blank").length} blank
-          columns hidden
+          {mappings.filter((m) => m.inferredType === "blank").length} blank columns hidden
         </span>
       </div>
 
@@ -166,17 +162,13 @@ export const ColumnMapper: React.FC<ColumnMapperProps> = ({
                 <input
                   type="text"
                   value={col.suggestedHeader}
-                  onChange={(e) =>
-                    updateCustomHeader(col.index, e.target.value)
-                  }
+                  onChange={(e) => updateCustomHeader(col.index, e.target.value)}
                   placeholder="Header name"
                   className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-slate-200 w-28 focus:ring-1 focus:ring-yellow-500"
                 />
               )}
 
-              {col.confidence >= 0.8 && (
-                <span className="text-xs text-emerald-400">auto</span>
-              )}
+              {col.confidence >= 0.8 && <span className="text-xs text-emerald-400">auto</span>}
             </div>
           </div>
         ))}
@@ -198,9 +190,8 @@ export const ColumnMapper: React.FC<ColumnMapperProps> = ({
                   >
                     {col.inferredType === "unknown"
                       ? col.suggestedHeader
-                      : COLUMN_TYPE_OPTIONS.find(
-                            (o) => o.value === col.inferredType,
-                          )?.label || col.suggestedHeader}
+                      : COLUMN_TYPE_OPTIONS.find((o) => o.value === col.inferredType)?.label ||
+                        col.suggestedHeader}
                   </th>
                 ))}
               </tr>
@@ -214,9 +205,7 @@ export const ColumnMapper: React.FC<ColumnMapperProps> = ({
                       className="p-2 text-slate-300 max-w-[200px] truncate"
                       title={row[col.index] || ""}
                     >
-                      {row[col.index] || (
-                        <span className="text-slate-600">-</span>
-                      )}
+                      {row[col.index] || <span className="text-slate-600">-</span>}
                     </td>
                   ))}
                 </tr>

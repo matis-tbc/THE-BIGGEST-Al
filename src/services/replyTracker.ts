@@ -46,18 +46,18 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function api() {
-  return typeof window !== 'undefined' ? window.electronAPI : undefined;
+  return typeof window !== "undefined" ? window.electronAPI : undefined;
 }
 
 function mapReplyRowToTracked(row: any): TrackedReply {
   return {
     id: row.id,
     conversationId: row.conversation_id,
-    recipientEmail: row.recipient_email || '',
-    fromAddress: row.from_address || '',
-    fromName: row.from_name || '',
-    subject: row.subject || '',
-    bodyPreview: row.body_preview || '',
+    recipientEmail: row.recipient_email || "",
+    fromAddress: row.from_address || "",
+    fromName: row.from_name || "",
+    subject: row.subject || "",
+    bodyPreview: row.body_preview || "",
     rawBody: row.raw_body || undefined,
     receivedAt: row.received_at,
     seen: !!row.seen,
@@ -71,8 +71,8 @@ function mapReplyRowToTracked(row: any): TrackedReply {
 export async function migrateFromLocalStorageOnce(): Promise<void> {
   const a = api();
   if (!a) return;
-  if (sessionStorage.getItem(MIGRATION_ATTEMPTED_KEY) === 'true') return;
-  sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, 'true');
+  if (sessionStorage.getItem(MIGRATION_ATTEMPTED_KEY) === "true") return;
+  sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, "true");
   try {
     const already = await a.dbIsMigrated();
     if (already) return;
@@ -94,7 +94,7 @@ export async function migrateFromLocalStorageOnce(): Promise<void> {
       } catch {}
     }
   } catch (err) {
-    console.warn('localStorage migration failed:', err);
+    console.warn("localStorage migration failed:", err);
   }
 }
 
@@ -109,17 +109,19 @@ export async function recordReplies(replies: TrackedReply[]): Promise<TrackedRep
   const a = api();
   if (!a) return [];
   if (replies.length === 0) return getReplies(replies[0]?.identityEmail);
-  await a.dbRecordReplies(replies.map((r) => ({
-    id: r.id,
-    conversationId: r.conversationId,
-    identityEmail: r.identityEmail || '',
-    fromAddress: r.fromAddress,
-    fromName: r.fromName,
-    subject: r.subject,
-    bodyPreview: r.bodyPreview,
-    rawBody: r.rawBody,
-    receivedAt: r.receivedAt,
-  })));
+  await a.dbRecordReplies(
+    replies.map((r) => ({
+      id: r.id,
+      conversationId: r.conversationId,
+      identityEmail: r.identityEmail || "",
+      fromAddress: r.fromAddress,
+      fromName: r.fromName,
+      subject: r.subject,
+      bodyPreview: r.bodyPreview,
+      rawBody: r.rawBody,
+      receivedAt: r.receivedAt,
+    })),
+  );
   return getReplies(replies[0]?.identityEmail);
 }
 
@@ -140,18 +142,30 @@ export async function markAllRepliesSeen(identityEmail?: string): Promise<Tracke
 export async function getDeltaLink(identityEmail: string | null): Promise<string | undefined> {
   const a = api();
   if (!a || !identityEmail) return undefined;
-  const v = await a.dbGetDeltaToken(identityEmail, 'Inbox');
+  const v = await a.dbGetDeltaToken(identityEmail, "Inbox");
   return v ?? undefined;
 }
 
-export async function setDeltaLink(identityEmail: string | null, link: string | undefined): Promise<void> {
+export async function setDeltaLink(
+  identityEmail: string | null,
+  link: string | undefined,
+): Promise<void> {
   const a = api();
   if (!a || !identityEmail) return;
-  if (link) await a.dbSetDeltaToken(identityEmail, 'Inbox', link);
-  else await a.dbClearDeltaToken(identityEmail, 'Inbox');
+  if (link) await a.dbSetDeltaToken(identityEmail, "Inbox", link);
+  else await a.dbClearDeltaToken(identityEmail, "Inbox");
 }
 
-export async function getTrackedRecipientByConversation(conversationId: string, identityEmail?: string): Promise<{ recipientEmail: string; recipientName?: string; campaignName?: string; runId?: string; identityEmail?: string } | null> {
+export async function getTrackedRecipientByConversation(
+  conversationId: string,
+  identityEmail?: string,
+): Promise<{
+  recipientEmail: string;
+  recipientName?: string;
+  campaignName?: string;
+  runId?: string;
+  identityEmail?: string;
+} | null> {
   const a = api();
   if (!a) return null;
   const rows = await a.dbListRecipients(identityEmail ? { identityEmail } : undefined);

@@ -98,9 +98,7 @@ describe("splitName", () => {
 
 describe("detectPattern", () => {
   it("detects firstname.lastname", () => {
-    expect(detectPattern("cameron.cloyd@digikey.com", "Cameron", "Cloyd")).toBe(
-      "first.last",
-    );
+    expect(detectPattern("cameron.cloyd@digikey.com", "Cameron", "Cloyd")).toBe("first.last");
   });
 
   it("detects flastname", () => {
@@ -112,15 +110,11 @@ describe("detectPattern", () => {
   });
 
   it("detects firstname_lastname", () => {
-    expect(detectPattern("john_smith@acme.com", "John", "Smith")).toBe(
-      "first_last",
-    );
+    expect(detectPattern("john_smith@acme.com", "John", "Smith")).toBe("first_last");
   });
 
   it("detects lastname.firstname", () => {
-    expect(detectPattern("smith.john@acme.com", "John", "Smith")).toBe(
-      "last.first",
-    );
+    expect(detectPattern("smith.john@acme.com", "John", "Smith")).toBe("last.first");
   });
 
   it("detects firstnamel", () => {
@@ -128,9 +122,7 @@ describe("detectPattern", () => {
   });
 
   it("detects first.middle.last with middle initial", () => {
-    expect(
-      detectPattern("scott.n.foley@intel.com", "Scott", "Foley", "n"),
-    ).toBe("first.m.last");
+    expect(detectPattern("scott.n.foley@intel.com", "Scott", "Foley", "n")).toBe("first.m.last");
   });
 
   it("returns null for unrecognized patterns", () => {
@@ -138,9 +130,7 @@ describe("detectPattern", () => {
   });
 
   it("handles accented names", () => {
-    expect(
-      detectPattern("rene.dupont@company.com", "Rene", "Dupont"),
-    ).toBe("first.last");
+    expect(detectPattern("rene.dupont@company.com", "Rene", "Dupont")).toBe("first.last");
   });
 });
 
@@ -289,10 +279,7 @@ describe("backtesting (leave-one-out)", () => {
   });
 
   it("skips domains with only 1 contact", () => {
-    const contacts = [
-      { name: "Solo Person", email: "solo@unique.com" },
-      ...ZAYO_CONTACTS,
-    ];
+    const contacts = [{ name: "Solo Person", email: "solo@unique.com" }, ...ZAYO_CONTACTS];
     const result = backtestPatterns(contacts);
     // unique.com should not appear in perDomain
     expect(result.perDomain.find((d) => d.domain === "unique.com")).toBeUndefined();
@@ -301,21 +288,24 @@ describe("backtesting (leave-one-out)", () => {
 
 describe("parseLinkedInUrl", () => {
   it("extracts name from standard URL", () => {
-    expect(
-      parseLinkedInUrl("https://www.linkedin.com/in/john-smith-a1b2c3d4"),
-    ).toEqual({ firstName: "John", lastName: "Smith" });
+    expect(parseLinkedInUrl("https://www.linkedin.com/in/john-smith-a1b2c3d4")).toEqual({
+      firstName: "John",
+      lastName: "Smith",
+    });
   });
 
   it("extracts name without hash suffix", () => {
-    expect(
-      parseLinkedInUrl("https://linkedin.com/in/ashley-menezes"),
-    ).toEqual({ firstName: "Ashley", lastName: "Menezes" });
+    expect(parseLinkedInUrl("https://linkedin.com/in/ashley-menezes")).toEqual({
+      firstName: "Ashley",
+      lastName: "Menezes",
+    });
   });
 
   it("handles multi-part names (first and last)", () => {
-    expect(
-      parseLinkedInUrl("https://linkedin.com/in/mary-jane-watson-abc123"),
-    ).toEqual({ firstName: "Mary", lastName: "Watson" });
+    expect(parseLinkedInUrl("https://linkedin.com/in/mary-jane-watson-abc123")).toEqual({
+      firstName: "Mary",
+      lastName: "Watson",
+    });
   });
 
   it("returns null for non-LinkedIn URLs", () => {
@@ -327,30 +317,29 @@ describe("parseLinkedInUrl", () => {
   });
 
   it("handles numeric suffix", () => {
-    expect(
-      parseLinkedInUrl("https://linkedin.com/in/craig-pierce-12345"),
-    ).toEqual({ firstName: "Craig", lastName: "Pierce" });
+    expect(parseLinkedInUrl("https://linkedin.com/in/craig-pierce-12345")).toEqual({
+      firstName: "Craig",
+      lastName: "Pierce",
+    });
   });
 
   it("strips query parameters", () => {
-    expect(
-      parseLinkedInUrl(
-        "https://linkedin.com/in/john-smith?trk=public_profile",
-      ),
-    ).toEqual({ firstName: "John", lastName: "Smith" });
+    expect(parseLinkedInUrl("https://linkedin.com/in/john-smith?trk=public_profile")).toEqual({
+      firstName: "John",
+      lastName: "Smith",
+    });
   });
 
   it("strips trailing slashes", () => {
-    expect(
-      parseLinkedInUrl("https://linkedin.com/in/john-smith/"),
-    ).toEqual({ firstName: "John", lastName: "Smith" });
+    expect(parseLinkedInUrl("https://linkedin.com/in/john-smith/")).toEqual({
+      firstName: "John",
+      lastName: "Smith",
+    });
   });
 
   it("handles URL with both query params and trailing slash", () => {
     expect(
-      parseLinkedInUrl(
-        "https://www.linkedin.com/in/bruce-bamford-abc123/?locale=en_US",
-      ),
+      parseLinkedInUrl("https://www.linkedin.com/in/bruce-bamford-abc123/?locale=en_US"),
     ).toEqual({ firstName: "Bruce", lastName: "Bamford" });
   });
 

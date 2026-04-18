@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { TunnelScene } from './tunnel/TunnelScene';
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { TunnelScene } from "./tunnel/TunnelScene";
 
 interface SplashScreenProps {
   onComplete: () => void;
@@ -24,8 +24,8 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   // Skip on click or key
   useEffect(() => {
     const handleKey = () => dismiss();
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [dismiss]);
 
   if (!visible) return null;
@@ -39,7 +39,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         onClick={dismiss}
         initial={{ opacity: 1 }}
         animate={{ opacity: fading ? 0 : 1 }}
-        transition={{ duration: 0.8, ease: 'easeInOut' }}
+        transition={{ duration: 0.8, ease: "easeInOut" }}
         onAnimationComplete={() => {
           if (fading) {
             setVisible(false);
@@ -60,8 +60,11 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
             transition={{ delay: 0.3, duration: 0.8 }}
             className="text-center"
           >
-            <h1 className="text-5xl font-bold text-white tracking-tight mb-2"
-              style={{ textShadow: '0 0 40px rgba(234, 179, 8, 0.5), 0 0 80px rgba(234, 179, 8, 0.2)' }}
+            <h1
+              className="text-5xl font-bold text-white tracking-tight mb-2"
+              style={{
+                textShadow: "0 0 40px rgba(234, 179, 8, 0.5), 0 0 80px rgba(234, 179, 8, 0.2)",
+              }}
             >
               Campaign Studio
             </h1>

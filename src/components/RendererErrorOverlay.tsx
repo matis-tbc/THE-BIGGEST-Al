@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from "react";
 
 interface RendererErrorOverlayProps {
   message: string;
@@ -12,13 +12,14 @@ export const RendererErrorOverlay: React.FC<RendererErrorOverlayProps> = ({ mess
         <h2 className="text-xl font-semibold mb-3">We hit a snag</h2>
         <p className="text-sm text-red-100 mb-4 whitespace-pre-wrap break-words">{message}</p>
         <p className="text-xs text-gray-300 mb-6">
-          Check the DevTools console (⌥⌘I / Ctrl+Shift+I) for more detail. Try retrying below or go back to the previous step.
+          Check the DevTools console (⌥⌘I / Ctrl+Shift+I) for more detail. Try retrying below or go
+          back to the previous step.
         </p>
         <div className="flex gap-3 justify-end">
           <button
             className="btn-secondary"
             onClick={() => {
-              console.info('[RendererErrorOverlay] Retrying after renderer error');
+              console.info("[RendererErrorOverlay] Retrying after renderer error");
               onRetry();
             }}
           >

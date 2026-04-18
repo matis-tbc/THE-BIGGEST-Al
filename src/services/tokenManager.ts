@@ -1,4 +1,4 @@
-import { GraphClientService } from './graphClient';
+import { GraphClientService } from "./graphClient";
 
 interface StoredTokens {
   accessToken: string;
@@ -24,7 +24,7 @@ export class TokenManager {
       }
       return false;
     } catch (error) {
-      console.error('Token initialization failed:', error);
+      console.error("Token initialization failed:", error);
       return false;
     }
   }
@@ -38,7 +38,7 @@ export class TokenManager {
 
       // Check if token is expired (with 5 minute buffer)
       const bufferTime = 5 * 60 * 1000; // 5 minutes
-      const isExpired = Date.now() >= (tokens.expiresAt - bufferTime);
+      const isExpired = Date.now() >= tokens.expiresAt - bufferTime;
 
       if (isExpired) {
         return await this.refreshToken();
@@ -46,7 +46,7 @@ export class TokenManager {
 
       return true;
     } catch (error) {
-      console.error('Token validation failed:', error);
+      console.error("Token validation failed:", error);
       return false;
     }
   }
@@ -55,7 +55,7 @@ export class TokenManager {
     if (this.refreshMutex) {
       // Wait for ongoing refresh
       while (this.refreshMutex) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
       return true;
     }
@@ -66,7 +66,7 @@ export class TokenManager {
       await this.graphService.refreshTokens();
       return true;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+      console.error("Token refresh failed:", error);
       return false;
     } finally {
       this.refreshMutex = false;
@@ -76,19 +76,19 @@ export class TokenManager {
   async logout(): Promise<void> {
     try {
       if (!window.electronAPI?.logout) {
-        throw new Error('Electron API unavailable');
+        throw new Error("Electron API unavailable");
       }
       await window.electronAPI.logout();
       this.graphService = new GraphClientService();
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
       throw error;
     }
   }
 
   isTokenExpired(tokens: StoredTokens): boolean {
     const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-    return Date.now() >= (tokens.expiresAt - bufferTime);
+    return Date.now() >= tokens.expiresAt - bufferTime;
   }
 
   getTokenExpiryTime(tokens: StoredTokens): Date {

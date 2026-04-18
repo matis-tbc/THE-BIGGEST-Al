@@ -1,4 +1,4 @@
-import * as dns from "dns";
+import * as dns from "node:dns";
 
 // Re-export pure logic from shared module
 export {

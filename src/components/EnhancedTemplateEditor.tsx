@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
+import type React from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Bold,
   Italic,
@@ -66,12 +67,8 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
 }) => {
   const [editorMode, setEditorMode] = useState<EditorMode>("visual");
   const [templateName, setTemplateName] = useState(template?.name || "");
-  const [templateCategory, setTemplateCategory] = useState(
-    template?.category || "",
-  );
-  const [templateTags, setTemplateTags] = useState<string[]>(
-    template?.tags || [],
-  );
+  const [templateCategory, setTemplateCategory] = useState(template?.category || "");
+  const [templateTags, setTemplateTags] = useState<string[]>(template?.tags || []);
   const [currentTag, setCurrentTag] = useState("");
   const [visualSubjects, setVisualSubjects] = useState<string[]>([]);
   const [visualTo, setVisualTo] = useState("");
@@ -109,7 +106,8 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
 
       const parsed = parseTemplateSections(template.content);
       // Support legacy single subject or new subjects array
-      const initialSubjects = template.subjects || (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
+      const initialSubjects =
+        template.subjects || (parsed.subject ? [parsed.subject] : DEFAULT_SUBJECTS);
       setVisualSubjects(initialSubjects.length > 0 ? initialSubjects : DEFAULT_SUBJECTS);
       setVisualTo(parsed.to || "");
       setVisualBody(parsed.body || template.content);
@@ -132,18 +130,12 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
       if (textarea) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
-        const newText =
-          visualBody.substring(0, start) +
-          variableText +
-          visualBody.substring(end);
+        const newText = visualBody.substring(0, start) + variableText + visualBody.substring(end);
         setVisualBody(newText);
 
         setTimeout(() => {
           textarea.focus();
-          textarea.setSelectionRange(
-            start + variableText.length,
-            start + variableText.length,
-          );
+          textarea.setSelectionRange(start + variableText.length, start + variableText.length);
         }, 0);
       }
     } else {
@@ -151,26 +143,18 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
       if (textarea) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
-        const newText =
-          rawContent.substring(0, start) +
-          variableText +
-          rawContent.substring(end);
+        const newText = rawContent.substring(0, start) + variableText + rawContent.substring(end);
         setRawContent(newText);
 
         setTimeout(() => {
           textarea.focus();
-          textarea.setSelectionRange(
-            start + variableText.length,
-            start + variableText.length,
-          );
+          textarea.setSelectionRange(start + variableText.length, start + variableText.length);
         }, 0);
       }
     }
   };
 
-  const handleFormatText = (
-    format: "bold" | "italic" | "list" | "orderedList" | "heading",
-  ) => {
+  const handleFormatText = (format: "bold" | "italic" | "list" | "orderedList" | "heading") => {
     if (editorMode !== "visual") return;
 
     const textarea = bodyTextareaRef.current;
@@ -199,10 +183,7 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
         break;
     }
 
-    const newText =
-      visualBody.substring(0, start) +
-      formattedText +
-      visualBody.substring(end);
+    const newText = visualBody.substring(0, start) + formattedText + visualBody.substring(end);
     setVisualBody(newText);
 
     setTimeout(() => {
@@ -240,7 +221,7 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
       const updatedTemplate: Template = {
         id: template?.id || `template-${Date.now()}`,
         name: templateName.trim(),
-        subjects: visualSubjects.filter(s => s.trim().length > 0),
+        subjects: visualSubjects.filter((s) => s.trim().length > 0),
         content,
         variables,
         category: templateCategory.trim() || undefined,
@@ -265,9 +246,7 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
       try {
         await onDelete(template.id);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to delete template",
-        );
+        setError(err instanceof Error ? err.message : "Failed to delete template");
       }
     }
   };
@@ -325,12 +304,8 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
     try {
       const sampleContact = contacts[0];
       const parsed = parseTemplateSections(content);
-      const subject = parsed.subject
-        ? mergeTemplate(parsed.subject, sampleContact)
-        : undefined;
-      const to = parsed.to
-        ? mergeTemplate(parsed.to, sampleContact)
-        : undefined;
+      const subject = parsed.subject ? mergeTemplate(parsed.subject, sampleContact) : undefined;
+      const to = parsed.to ? mergeTemplate(parsed.to, sampleContact) : undefined;
       const body = mergeTemplate(parsed.body || content, sampleContact);
 
       return { subject, to, body };
@@ -398,21 +373,14 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
                   className="hidden"
                   onChange={handleImport}
                 />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="btn-secondary"
-                >
+                <button onClick={() => fileInputRef.current?.click()} className="btn-secondary">
                   <Upload className="h-4 w-4 mr-2" />
                   <span>Import</span>
                 </button>
               </>
             )}
 
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="btn-primary"
-            >
+            <button onClick={handleSave} disabled={isSaving} className="btn-primary">
               <Save className="h-4 w-4 mr-2" />
               <span>{isSaving ? "Saving..." : "Save Template"}</span>
             </button>
@@ -469,9 +437,7 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
-              Category
-            </label>
+            <label className="text-sm font-medium text-gray-700">Category</label>
             <div className="relative">
               <input
                 type="text"
@@ -491,9 +457,7 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-gray-700">Tags</label>
-            <span className="text-xs text-gray-500">
-              {templateTags.length} tags
-            </span>
+            <span className="text-xs text-gray-500">{templateTags.length} tags</span>
           </div>
           <p className="text-xs text-gray-400 mb-2">
             Tags become available as variables in your template.
@@ -541,10 +505,11 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
               <button
                 key={mode}
                 onClick={() => setEditorMode(mode)}
-                className={`flex items-center space-x-2 px-4 py-3 rounded-t-lg text-sm font-medium transition-all duration-200 ${editorMode === mode
-                  ? "bg-slate-800 border-t border-x border-slate-600 text-yellow-500 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  }`}
+                className={`flex items-center space-x-2 px-4 py-3 rounded-t-lg text-sm font-medium transition-all duration-200 ${
+                  editorMode === mode
+                    ? "bg-slate-800 border-t border-x border-slate-600 text-yellow-500 shadow-sm"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                }`}
               >
                 {mode === "visual" && <Type className="h-4 w-4" />}
                 {mode === "raw" && <Code className="h-4 w-4" />}
@@ -598,15 +563,22 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
           <div className="bg-slate-800/80 border-b border-gray-600 px-4 py-3 space-y-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-slate-300">Subject Lines (A/B Testing)</label>
-                <button onClick={handleAddSubject} className="text-xs text-yellow-500 hover:text-yellow-400 flex items-center">
+                <label className="text-sm font-medium text-slate-300">
+                  Subject Lines (A/B Testing)
+                </label>
+                <button
+                  onClick={handleAddSubject}
+                  className="text-xs text-yellow-500 hover:text-yellow-400 flex items-center"
+                >
                   <Plus className="h-3 w-3 mr-1" /> Add Subject Option
                 </button>
               </div>
               <div className="space-y-2">
                 {visualSubjects.map((subject, index) => (
                   <div key={index} className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-slate-500 w-5">{(index + 1).toString().padStart(2, '0')}.</span>
+                    <span className="text-xs font-mono text-slate-500 w-5">
+                      {(index + 1).toString().padStart(2, "0")}.
+                    </span>
                     <input
                       type="text"
                       value={subject}
@@ -615,7 +587,10 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
                       className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-yellow-500/50 focus:ring-1 focus:ring-yellow-500/50 transition-colors"
                     />
                     {visualSubjects.length > 1 && (
-                      <button onClick={() => handleRemoveSubject(index)} className="text-slate-500 hover:text-rose-400 p-1">
+                      <button
+                        onClick={() => handleRemoveSubject(index)}
+                        className="text-slate-500 hover:text-rose-400 p-1"
+                      >
                         <X className="h-4 w-4" />
                       </button>
                     )}
@@ -631,10 +606,14 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
                     {contacts.length > 0 && (
                       <span className="text-slate-400 ml-1">
                         With {contacts.length} contacts:{" "}
-                        {visualSubjects.map((_, i) => {
-                          const count = Math.floor(contacts.length / visualSubjects.length) + (i < contacts.length % visualSubjects.length ? 1 : 0);
-                          return `Subject ${(i + 1).toString().padStart(2, "0")} = ${count}`;
-                        }).join(", ")}
+                        {visualSubjects
+                          .map((_, i) => {
+                            const count =
+                              Math.floor(contacts.length / visualSubjects.length) +
+                              (i < contacts.length % visualSubjects.length ? 1 : 0);
+                            return `Subject ${(i + 1).toString().padStart(2, "0")} = ${count}`;
+                          })
+                          .join(", ")}
                       </span>
                     )}
                   </p>
@@ -720,20 +699,16 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
           )}
           {editorMode === "preview" && (
             <div className="p-6 space-y-4 bg-slate-900 text-slate-100">
-              <h3 className="text-lg font-semibold text-white">
-                Preview with Sample Contact
-              </h3>
+              <h3 className="text-lg font-semibold text-white">Preview with Sample Contact</h3>
               <div className="bg-slate-800 rounded-lg p-4 space-y-3">
                 {preview.subject && (
                   <div>
-                    <span className="font-medium text-slate-400">Subject:</span>{" "}
-                    {preview.subject}
+                    <span className="font-medium text-slate-400">Subject:</span> {preview.subject}
                   </div>
                 )}
                 {preview.to && (
                   <div>
-                    <span className="font-medium text-slate-400">To:</span>{" "}
-                    {preview.to}
+                    <span className="font-medium text-slate-400">To:</span> {preview.to}
                   </div>
                 )}
                 <div className="whitespace-pre-wrap text-slate-200 bg-slate-900/50 p-3 rounded border border-slate-700 max-h-96 overflow-y-auto">

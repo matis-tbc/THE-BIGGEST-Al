@@ -1,7 +1,7 @@
-import { useRef, useEffect, useMemo } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import * as THREE from 'three';
-import { vertexShader, fragmentShader } from './tunnelShader';
+import { useRef, useEffect, useMemo } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import * as THREE from "three";
+import { vertexShader, fragmentShader } from "./tunnelShader";
 
 interface TunnelMeshProps {
   interactive?: boolean;
@@ -13,17 +13,20 @@ function TunnelMesh({ interactive = false, speed = 1.0 }: TunnelMeshProps) {
   const mouseRef = useRef(new THREE.Vector2(0.5, 0.5));
   const { size } = useThree();
 
-  const uniforms = useMemo(() => ({
-    uTime: { value: 0 },
-    uResolution: { value: new THREE.Vector2(size.width, size.height) },
-    uMouse: { value: new THREE.Vector2(0.5, 0.5) },
-  }), []);
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uResolution: { value: new THREE.Vector2(size.width, size.height) },
+      uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+    }),
+    [size.width, size.height],
+  );
 
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.uResolution.value.set(
         size.width * window.devicePixelRatio,
-        size.height * window.devicePixelRatio
+        size.height * window.devicePixelRatio,
       );
     }
   }, [size]);
@@ -32,13 +35,10 @@ function TunnelMesh({ interactive = false, speed = 1.0 }: TunnelMeshProps) {
     if (!interactive) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      mouseRef.current.set(
-        e.clientX / window.innerWidth,
-        1.0 - e.clientY / window.innerHeight
-      );
+      mouseRef.current.set(e.clientX / window.innerWidth, 1.0 - e.clientY / window.innerHeight);
     };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [interactive]);
 
   useFrame(({ clock }) => {
@@ -70,7 +70,11 @@ interface TunnelSceneProps {
   className?: string;
 }
 
-export function TunnelScene({ interactive = false, speed = 1.0, className = '' }: TunnelSceneProps) {
+export function TunnelScene({
+  interactive = false,
+  speed = 1.0,
+  className = "",
+}: TunnelSceneProps) {
   return (
     <Canvas
       className={className}
@@ -79,9 +83,9 @@ export function TunnelScene({ interactive = false, speed = 1.0, className = '' }
       gl={{
         antialias: false,
         alpha: false,
-        powerPreference: 'high-performance',
+        powerPreference: "high-performance",
       }}
-      style={{ background: '#020205' }}
+      style={{ background: "#020205" }}
     >
       <TunnelMesh interactive={interactive} speed={speed} />
     </Canvas>

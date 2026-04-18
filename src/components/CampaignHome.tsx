@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, Users, Building2, Archive, Clock } from 'lucide-react';
-import { campaignStore, Campaign } from '../services/campaignStore';
+import type React from "react";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Plus, Users, Building2, Archive, Clock } from "lucide-react";
+import { campaignStore, type Campaign } from "../services/campaignStore";
 
 interface CampaignHomeProps {
   onOpenCampaign: (id: string) => void;
@@ -11,8 +12,8 @@ interface CampaignHomeProps {
 export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onManageMembers }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newDescription, setNewDescription] = useState('');
+  const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
 
   useEffect(() => {
     setCampaigns(campaignStore.listCampaigns());
@@ -27,7 +28,7 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
       id: `campaign-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: newName.trim(),
       description: newDescription.trim(),
-      status: 'active',
+      status: "active",
       createdAt: now,
       updatedAt: now,
       companies: [],
@@ -37,17 +38,17 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
     };
 
     campaignStore.saveCampaign(campaign);
-    setNewName('');
-    setNewDescription('');
+    setNewName("");
+    setNewDescription("");
     setShowCreateForm(false);
     onOpenCampaign(campaign.id);
   };
 
-  const statusBadge = (status: Campaign['status']) => {
+  const statusBadge = (status: Campaign["status"]) => {
     const styles = {
-      active: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-      completed: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-      archived: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+      active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      completed: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+      archived: "bg-slate-500/10 text-slate-400 border-slate-500/20",
     };
     return (
       <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${styles[status]}`}>
@@ -58,7 +59,7 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   };
 
   return (
@@ -67,7 +68,9 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">Campaigns</h2>
-          <p className="text-slate-400">Organize outreach by campaign — generate companies, import contacts, and run drafts.</p>
+          <p className="text-slate-400">
+            Organize outreach by campaign — generate companies, import contacts, and run drafts.
+          </p>
         </div>
         <div className="flex gap-3">
           <button onClick={onManageMembers} className="btn-secondary flex items-center gap-2">
@@ -98,24 +101,33 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
               className="input-field"
               placeholder='e.g. "Canopies", "Brake Pads Q2"'
               value={newName}
-              onChange={e => setNewName(e.target.value)}
-              autoFocus
+              onChange={(e) => setNewName(e.target.value)}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Description (optional)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Description (optional)
+            </label>
             <input
               type="text"
               className="input-field"
               placeholder="Brief description of what this campaign targets"
               value={newDescription}
-              onChange={e => setNewDescription(e.target.value)}
+              onChange={(e) => setNewDescription(e.target.value)}
             />
           </div>
           <div className="flex gap-3 justify-end">
-            <button type="button" onClick={() => setShowCreateForm(false)} className="btn-secondary">Cancel</button>
-            <button type="submit" disabled={!newName.trim()} className="btn-primary">Create & Open</button>
+            <button
+              type="button"
+              onClick={() => setShowCreateForm(false)}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button type="submit" disabled={!newName.trim()} className="btn-primary">
+              Create & Open
+            </button>
           </div>
         </motion.form>
       )}
@@ -128,7 +140,7 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
           animate="show"
           variants={{ show: { transition: { staggerChildren: 0.07 } } }}
         >
-          {campaigns.map(campaign => (
+          {campaigns.map((campaign) => (
             <motion.div
               key={campaign.id}
               variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
@@ -176,11 +188,14 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
       {/* Cmd+K hint */}
       <div className="text-center pt-4 border-t border-slate-800">
         <p className="text-xs text-slate-600">
-          Press{' '}
+          Press{" "}
           <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-500">
-            {typeof navigator !== 'undefined' && navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl+'}K
-          </kbd>
-          {' '}for quick actions — navigate, create campaigns, and more
+            {typeof navigator !== "undefined" && navigator.platform?.includes("Mac")
+              ? "\u2318"
+              : "Ctrl+"}
+            K
+          </kbd>{" "}
+          for quick actions — navigate, create campaigns, and more
         </p>
       </div>
     </div>

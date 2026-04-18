@@ -60,18 +60,12 @@ function save(store: PatternStore): void {
 
 export function getPattern(domain: string): DomainPattern | null {
   const store = load();
-  return (
-    store.patterns.find(
-      (p) => p.domain.toLowerCase() === domain.toLowerCase(),
-    ) || null
-  );
+  return store.patterns.find((p) => p.domain.toLowerCase() === domain.toLowerCase()) || null;
 }
 
 export function savePattern(domain: string, pattern: DomainPattern): void {
   const store = load();
-  const idx = store.patterns.findIndex(
-    (p) => p.domain.toLowerCase() === domain.toLowerCase(),
-  );
+  const idx = store.patterns.findIndex((p) => p.domain.toLowerCase() === domain.toLowerCase());
   if (idx >= 0) {
     store.patterns[idx] = pattern;
   } else {
@@ -87,17 +81,13 @@ export function listPatterns(): DomainPattern[] {
 export function getDomain(companyName: string): DomainInfo | null {
   const store = load();
   const lower = companyName.toLowerCase().trim();
-  return (
-    store.domains.find((d) => d.companyName.toLowerCase() === lower) || null
-  );
+  return store.domains.find((d) => d.companyName.toLowerCase() === lower) || null;
 }
 
 export function saveDomain(info: DomainInfo): void {
   const store = load();
   const lower = info.companyName.toLowerCase().trim();
-  const idx = store.domains.findIndex(
-    (d) => d.companyName.toLowerCase() === lower,
-  );
+  const idx = store.domains.findIndex((d) => d.companyName.toLowerCase() === lower);
   if (idx >= 0) {
     store.domains[idx] = info;
   } else {
@@ -107,16 +97,15 @@ export function saveDomain(info: DomainInfo): void {
 }
 
 export function listDomains(): DomainInfo[] {
-  return load().domains.sort((a, b) =>
-    a.companyName.localeCompare(b.companyName),
-  );
+  return load().domains.sort((a, b) => a.companyName.localeCompare(b.companyName));
 }
 
 // Bulk analyze contacts and update stored patterns.
 // Called after every import to accumulate knowledge.
-export function learnFromContacts(
-  contacts: { name: string; email: string }[],
-): { updated: number; newDomains: number } {
+export function learnFromContacts(contacts: { name: string; email: string }[]): {
+  updated: number;
+  newDomains: number;
+} {
   // Group by domain
   const byDomain = new Map<string, { name: string; email: string }[]>();
   for (const c of contacts) {
@@ -159,8 +148,7 @@ export function learnFromContacts(
     // Also learn company-domain mapping from contact data
     // Extract company name if available in the contact objects
     const sampleContact = domainContacts[0] as Record<string, any>;
-    const companyName =
-      sampleContact.Company || sampleContact.company || null;
+    const companyName = sampleContact.Company || sampleContact.company || null;
     if (companyName && typeof companyName === "string") {
       const existingDomain = getDomain(companyName);
       if (!existingDomain) {

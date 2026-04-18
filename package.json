@@ -12,7 +12,12 @@
     "build:electron": "tsc -p electron/tsconfig.json",
     "start": "cross-env NODE_ENV=production electron .",
     "dist": "npm run build && electron-builder",
-    "postinstall": "cross-env CPLUS_INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 electron-builder install-app-deps"
+    "postinstall": "cross-env CPLUS_INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 electron-builder install-app-deps",
+    "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "vitest run",
+    "ci": "npm run typecheck && npm run lint && npm run test"
   },
   "keywords": [
     "electron",
@@ -23,6 +28,7 @@
   "author": "Email Drafter",
   "license": "MIT",
   "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.43",

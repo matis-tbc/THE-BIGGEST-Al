@@ -1,8 +1,14 @@
-const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
 interface AuthLike {
-  getStoredTokens(): Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null>;
-  refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string; expiresAt: number }>;
+  getStoredTokens(): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+  } | null>;
+  refreshAccessToken(
+    refreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string; expiresAt: number }>;
 }
 
 export interface GraphFetchOptions extends RequestInit {
@@ -16,25 +22,25 @@ export async function graphFetch(
 ): Promise<Response> {
   let tokens = await authService.getStoredTokens();
   if (!tokens) {
-    throw new Error('Not signed in');
+    throw new Error("Not signed in");
   }
 
   const buildHeaders = (accessToken: string): Record<string, string> => {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
+      Accept: "application/json",
       ...(init?.headers as Record<string, string> | undefined),
     };
-    if (init?.body && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json';
+    if (init?.body && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
     }
     if (init?.clientRequestId) {
-      headers['client-request-id'] = init.clientRequestId;
+      headers["client-request-id"] = init.clientRequestId;
     }
     return headers;
   };
 
-  const url = endpoint.startsWith('http') ? endpoint : `${GRAPH_BASE}${endpoint}`;
+  const url = endpoint.startsWith("http") ? endpoint : `${GRAPH_BASE}${endpoint}`;
 
   let response = await fetch(url, { ...init, headers: buildHeaders(tokens.accessToken) });
 
@@ -54,7 +60,9 @@ export async function graphJson<T = any>(
   const response = await graphFetch(authService, endpoint, init);
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Graph ${init?.method || 'GET'} ${endpoint} failed (${response.status}): ${body}`);
+    throw new Error(
+      `Graph ${init?.method || "GET"} ${endpoint} failed (${response.status}): ${body}`,
+    );
   }
   if (response.status === 204) return null as T;
   return response.json() as Promise<T>;

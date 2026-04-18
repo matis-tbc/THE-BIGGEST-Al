@@ -15,7 +15,7 @@ const PATTERNS = [
   {
     id: "f.last",
     label: "f.lastname",
-    generate: (first: string, last: string) => `${(first[0] || "")}.${last}`,
+    generate: (first: string, last: string) => `${first[0] || ""}.${last}`,
   },
   {
     id: "first_last",
@@ -134,9 +134,7 @@ export function detectPattern(
   }
 
   // Check middle initial variants (first.m.last, firstmlast, etc.)
-  const mid = middleInitial
-    ? normalizeName(middleInitial)[0] || ""
-    : "";
+  const mid = middleInitial ? normalizeName(middleInitial)[0] || "" : "";
   if (mid) {
     if (localPart === `${first}.${mid}.${last}`) return "first.m.last";
     if (localPart === `${first}${mid}${last}`) return "firstmlast";
@@ -211,9 +209,7 @@ export function guessEmail(
 
         // If confidence < 100%, also return the next best guess as fallback
         if (match.confidence < 1.0) {
-          const alt = PATTERNS.find(
-            (p) => p.id !== match.patternId,
-          );
+          const alt = PATTERNS.find((p) => p.id !== match.patternId);
           if (alt) {
             return [
               primary,
@@ -253,9 +249,7 @@ export function guessEmailBatch(
   }));
 }
 
-export function backtestPatterns(
-  contacts: { name: string; email: string }[],
-): BacktestResult {
+export function backtestPatterns(contacts: { name: string; email: string }[]): BacktestResult {
   // Group by domain once
   const byDomain = new Map<string, { name: string; email: string }[]>();
   for (const contact of contacts) {
@@ -285,9 +279,7 @@ export function backtestPatterns(
       if (guesses.length > 0) {
         domainTestable++;
         totalTestable++;
-        if (
-          guesses[0].email.toLowerCase() === testContact.email.toLowerCase()
-        ) {
+        if (guesses[0].email.toLowerCase() === testContact.email.toLowerCase()) {
           domainCorrect++;
           totalCorrect++;
         }
@@ -314,9 +306,7 @@ export function backtestPatterns(
   };
 }
 
-export function parseLinkedInUrl(
-  url: string,
-): { firstName: string; lastName: string } | null {
+export function parseLinkedInUrl(url: string): { firstName: string; lastName: string } | null {
   // Strip query params and trailing slashes before matching
   const cleanUrl = url.split("?")[0].replace(/\/+$/, "");
   const match = cleanUrl.match(/linkedin\.com\/in\/([a-z0-9-]+)/i);

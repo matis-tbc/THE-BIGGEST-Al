@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import type React from "react";
+import { useState, useMemo } from "react";
 import type { BacktestResult } from "../utils/emailPatterns";
 
 interface Contact {
@@ -25,9 +26,7 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
   companies,
   onContactsUpdated,
 }) => {
-  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(
-    null,
-  );
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [isRunningBacktest, setIsRunningBacktest] = useState(false);
   const [linkedInUrls, setLinkedInUrls] = useState("");
   const [linkedInDomain, setLinkedInDomain] = useState("");
@@ -41,15 +40,13 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
   // Known contacts for pattern training (those with valid emails)
   const knownContacts = useMemo(
     () =>
-      contacts
-        .filter((c) => c.email && c.email.includes("@"))
-        .map((c) => ({ name: c.name, email: c.email })),
+      contacts.filter((c) => c.email?.includes("@")).map((c) => ({ name: c.name, email: c.email })),
     [contacts],
   );
 
   // Contacts missing emails
   const missingEmailContacts = useMemo(
-    () => contacts.filter((c) => !c.email || !c.email.includes("@")),
+    () => contacts.filter((c) => !c.email?.includes("@")),
     [contacts],
   );
 
@@ -164,12 +161,10 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
       <div className="border border-slate-700 rounded-xl bg-slate-800/30 p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h4 className="text-sm font-medium text-slate-200">
-              Email Pattern Accuracy
-            </h4>
+            <h4 className="text-sm font-medium text-slate-200">Email Pattern Accuracy</h4>
             <p className="text-xs text-slate-500 mt-0.5">
-              Tests pattern detection against {knownContacts.length} known
-              contacts using leave-one-out validation
+              Tests pattern detection against {knownContacts.length} known contacts using
+              leave-one-out validation
             </p>
           </div>
           <button
@@ -195,8 +190,7 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
               </div>
               <div className="bg-slate-900/50 rounded-lg px-3 py-2 text-center">
                 <div className="text-2xl font-bold text-slate-300">
-                  {backtestResult.correctGuesses}/
-                  {backtestResult.testableContacts}
+                  {backtestResult.correctGuesses}/{backtestResult.testableContacts}
                 </div>
                 <div className="text-xs text-slate-500">Correct Guesses</div>
               </div>
@@ -217,12 +211,8 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
                   {backtestResult.perDomain.map((d) => (
                     <tr key={d.domain} className="border-t border-slate-800">
                       <td className="p-1 text-slate-300">{d.domain}</td>
-                      <td className="p-1 text-slate-400 font-mono">
-                        {d.pattern}
-                      </td>
-                      <td className="p-1 text-center text-slate-400">
-                        {d.contacts}
-                      </td>
+                      <td className="p-1 text-slate-400 font-mono">{d.pattern}</td>
+                      <td className="p-1 text-center text-slate-400">{d.contacts}</td>
                       <td className="p-1 text-right">
                         <span
                           className={
@@ -267,7 +257,10 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
           {resolvedDomains.size > 0 && (
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {[...resolvedDomains.entries()].map(([company, domain]) => (
-                <div key={company} className="flex items-center justify-between text-xs bg-slate-900/50 rounded px-2 py-1.5">
+                <div
+                  key={company}
+                  className="flex items-center justify-between text-xs bg-slate-900/50 rounded px-2 py-1.5"
+                >
                   <span className="text-slate-300">{company}</span>
                   {domain ? (
                     <button
@@ -288,12 +281,10 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
 
       {/* LinkedIn URL Quick Add */}
       <div className="border border-slate-700 rounded-xl bg-slate-800/30 p-4">
-        <h4 className="text-sm font-medium text-slate-200 mb-2">
-          Quick Add from LinkedIn URLs
-        </h4>
+        <h4 className="text-sm font-medium text-slate-200 mb-2">Quick Add from LinkedIn URLs</h4>
         <p className="text-xs text-slate-500 mb-3">
-          Paste LinkedIn profile URLs (one per line). Names are extracted from
-          the URL and emails are guessed from known patterns.
+          Paste LinkedIn profile URLs (one per line). Names are extracted from the URL and emails
+          are guessed from known patterns.
         </p>
 
         <div className="space-y-2">
@@ -301,32 +292,35 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
             <input
               type="text"
               value={linkedInDomain}
-              onChange={(e) => { setLinkedInDomain(e.target.value); setMxValid(null); }}
+              onChange={(e) => {
+                setLinkedInDomain(e.target.value);
+                setMxValid(null);
+              }}
               placeholder="Company email domain (e.g., digikey.com)"
               className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500"
             />
-            {mxValid === true && <span className="text-xs text-emerald-400 flex-shrink-0">MX valid</span>}
-            {mxValid === false && <span className="text-xs text-rose-400 flex-shrink-0">Invalid domain</span>}
+            {mxValid === true && (
+              <span className="text-xs text-emerald-400 flex-shrink-0">MX valid</span>
+            )}
+            {mxValid === false && (
+              <span className="text-xs text-rose-400 flex-shrink-0">Invalid domain</span>
+            )}
           </div>
           <textarea
             value={linkedInUrls}
             onChange={(e) => setLinkedInUrls(e.target.value)}
-            placeholder={"https://linkedin.com/in/john-smith-abc123\nhttps://linkedin.com/in/jane-doe-xyz789"}
+            placeholder={
+              "https://linkedin.com/in/john-smith-abc123\nhttps://linkedin.com/in/jane-doe-xyz789"
+            }
             className="w-full bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 font-mono placeholder-slate-600 focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 resize-y"
             rows={4}
           />
           <button
             onClick={processLinkedInUrls}
-            disabled={
-              isProcessingUrls ||
-              !linkedInDomain.trim() ||
-              !linkedInUrls.trim()
-            }
+            disabled={isProcessingUrls || !linkedInDomain.trim() || !linkedInUrls.trim()}
             className="btn-primary text-sm w-full disabled:opacity-50"
           >
-            {isProcessingUrls
-              ? "Processing..."
-              : "Generate Contacts from URLs"}
+            {isProcessingUrls ? "Processing..." : "Generate Contacts from URLs"}
           </button>
         </div>
 
@@ -354,10 +348,7 @@ export const EmailGuesser: React.FC<EmailGuesserProps> = ({
                 </div>
               ))}
             </div>
-            <button
-              onClick={addLinkedInResultsToContacts}
-              className="btn-primary text-xs w-full"
-            >
+            <button onClick={addLinkedInResultsToContacts} className="btn-primary text-xs w-full">
               Add {linkedInResults.length} Contacts to Campaign
             </button>
           </div>

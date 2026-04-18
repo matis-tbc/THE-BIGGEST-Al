@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Gauge } from 'lucide-react';
-import { TunnelScene } from './tunnel/TunnelScene';
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowLeft, Gauge } from "lucide-react";
+import { TunnelScene } from "./tunnel/TunnelScene";
 
 interface TunnelPlaygroundProps {
   onBack: () => void;
@@ -38,7 +38,7 @@ export function TunnelPlayground({ onBack }: TunnelPlaygroundProps) {
               max="3"
               step="0.1"
               value={speed}
-              onChange={e => setSpeed(parseFloat(e.target.value))}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
               className="w-24 accent-yellow-500"
             />
             <span className="text-xs text-white/60 w-10">{speed.toFixed(1)}x</span>
@@ -55,10 +55,7 @@ export function TunnelPlayground({ onBack }: TunnelPlaygroundProps) {
 
       {/* Tap to restore UI */}
       {!showControls && (
-        <div
-          className="absolute inset-0 cursor-pointer"
-          onClick={() => setShowControls(true)}
-        />
+        <div className="absolute inset-0 cursor-pointer" onClick={() => setShowControls(true)} />
       )}
     </div>
   );

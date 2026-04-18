@@ -66,9 +66,7 @@ CU Boulder | {Major}
     const raw = "Hello {Custom Field}, this is {Weird Variable}.";
     const result = convertRawTemplate(raw);
 
-    expect(result.content).toBe(
-      "Hello {{Custom Field}}, this is {{Weird Variable}}.",
-    );
+    expect(result.content).toBe("Hello {{Custom Field}}, this is {{Weird Variable}}.");
     expect(result.mappings).toHaveLength(2);
     expect(result.mappings[0].isAlias).toBe(false);
     expect(result.mappings[1].isAlias).toBe(false);
@@ -97,9 +95,7 @@ CU Boulder | {Major}
     const result = convertRawTemplate(raw);
 
     // All three should map to the same canonical name
-    expect(result.content).toBe(
-      "{{Sender Name}} and {{Sender Name}} and {{Sender Name}}",
-    );
+    expect(result.content).toBe("{{Sender Name}} and {{Sender Name}} and {{Sender Name}}");
     // Only one mapping (deduped by lowercase)
     expect(result.mappings).toHaveLength(1);
   });
@@ -109,14 +105,14 @@ describe("VARIABLE_ALIASES", () => {
   it("contains all expected aliases", () => {
     expect(VARIABLE_ALIASES["your name"]).toBe("Sender Name");
     expect(VARIABLE_ALIASES["my name"]).toBe("Sender Name");
-    expect(VARIABLE_ALIASES["role"]).toBe("Sender Role");
-    expect(VARIABLE_ALIASES["major"]).toBe("Sender Major");
+    expect(VARIABLE_ALIASES.role).toBe("Sender Role");
+    expect(VARIABLE_ALIASES.major).toBe("Sender Major");
     expect(VARIABLE_ALIASES["phone number"]).toBe("Sender Phone");
-    expect(VARIABLE_ALIASES["email"]).toBe("Sender Email");
-    expect(VARIABLE_ALIASES["name"]).toBe("First Name");
+    expect(VARIABLE_ALIASES.email).toBe("Sender Email");
+    expect(VARIABLE_ALIASES.name).toBe("First Name");
     expect(VARIABLE_ALIASES["contact name"]).toBe("First Name");
     expect(VARIABLE_ALIASES["company name"]).toBe("Company");
-    expect(VARIABLE_ALIASES["company"]).toBe("Company");
+    expect(VARIABLE_ALIASES.company).toBe("Company");
   });
 });
 
@@ -141,8 +137,7 @@ describe("extractTemplateName", () => {
   });
 
   it("returns empty for generic template with variable company", () => {
-    const text =
-      "We are reaching out to {Company Name} because your work depends on...";
+    const text = "We are reaching out to {Company Name} because your work depends on...";
     expect(extractTemplateName(text)).toBe("");
   });
 
@@ -152,22 +147,18 @@ describe("extractTemplateName", () => {
   });
 
   it("strips variables from Subject header", () => {
-    const text =
-      "Subject: CU Hyperloop // {{Company}}\nTo: {{Email}}\n\nHello...";
+    const text = "Subject: CU Hyperloop // {{Company}}\nTo: {{Email}}\n\nHello...";
     expect(extractTemplateName(text)).toBe("CU Hyperloop //");
   });
 
   it("handles trailing whitespace from Google Docs", () => {
-    const text =
-      "We are reaching out to L3Harris because of your leadership...\n\n\n\n\n";
+    const text = "We are reaching out to L3Harris because of your leadership...\n\n\n\n\n";
     expect(extractTemplateName(text)).toBe("L3Harris");
   });
 
   it("returns fallback for plain text with no patterns", () => {
     const text = "This is a short plain text email with no patterns.";
-    expect(extractTemplateName(text)).toBe(
-      "This is a short plain text email with no patterns.",
-    );
+    expect(extractTemplateName(text)).toBe("This is a short plain text email with no patterns.");
   });
 });
 
@@ -180,10 +171,7 @@ describe("getSubjectsForTemplate / getSubjectForContactIndex", () => {
       content: "Hello",
       variables: [],
     };
-    expect(getSubjectsForTemplate(template)).toEqual([
-      "Subject A",
-      "Subject B",
-    ]);
+    expect(getSubjectsForTemplate(template)).toEqual(["Subject A", "Subject B"]);
   });
 
   it("falls back to content Subject header", () => {

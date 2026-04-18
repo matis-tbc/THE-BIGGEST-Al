@@ -20,18 +20,18 @@ export const VARIABLE_ALIASES: Record<string, string> = {
   // Sender fields (signature block)
   "your name": "Sender Name",
   "my name": "Sender Name",
-  "role": "Sender Role",
-  "major": "Sender Major",
+  role: "Sender Role",
+  major: "Sender Major",
   "phone number": "Sender Phone",
-  "email": "Sender Email",
+  email: "Sender Email",
   // Contact fields
-  "name": "First Name",
+  name: "First Name",
   "contact name": "First Name",
   "first name": "First Name",
   "contact first name": "First Name",
   // Company
   "company name": "Company",
-  "company": "Company",
+  company: "Company",
 };
 
 export interface VariableMapping {
@@ -77,10 +77,7 @@ export function convertRawTemplate(rawText: string): ConvertedTemplate {
   // Replace all {single brace} with {{canonical}} names
   let converted = rawText;
   for (const mapping of mappings) {
-    const regex = new RegExp(
-      `(?<!\\{)\\{\\s*${escapeRegex(mapping.original)}\\s*\\}(?!\\})`,
-      "gi",
-    );
+    const regex = new RegExp(`(?<!\\{)\\{\\s*${escapeRegex(mapping.original)}\\s*\\}(?!\\})`, "gi");
     converted = converted.replace(regex, `{{${mapping.converted}}}`);
   }
 
@@ -101,7 +98,10 @@ export function extractTemplateName(content: string): string {
   // Try Subject header
   const subjectMatch = content.match(/^Subject:\s*(.+)$/im);
   if (subjectMatch) {
-    const stripped = subjectMatch[1].replace(/\{\{[^}]+\}\}/g, "").replace(/\{[^}]+\}/g, "").trim();
+    const stripped = subjectMatch[1]
+      .replace(/\{\{[^}]+\}\}/g, "")
+      .replace(/\{[^}]+\}/g, "")
+      .trim();
     if (stripped.length > 2) return stripped;
   }
   // Fallback: first meaningful line (skip "Hello", "Dear", etc.)
@@ -111,7 +111,7 @@ export function extractTemplateName(content: string): string {
     if (!trimmed) continue;
     if (/^(hello|dear|hi|hey|subject:|to:)/i.test(trimmed)) continue;
     if (trimmed.length <= 50) return trimmed;
-    return trimmed.slice(0, 40) + "...";
+    return `${trimmed.slice(0, 40)}...`;
   }
   return "";
 }
@@ -126,26 +126,21 @@ export function mergeTemplate(template: string, contact: Contact): string {
     const lowerKey = key.toLowerCase();
 
     // Check for case-insensitive exact match in contact keys
-    const foundKey = Object.keys(contact).find(
-      (k) => k.toLowerCase() === lowerKey,
-    );
-    if (foundKey && contact[foundKey] !== undefined)
-      return contact[foundKey] as string;
+    const foundKey = Object.keys(contact).find((k) => k.toLowerCase() === lowerKey);
+    if (foundKey && contact[foundKey] !== undefined) return contact[foundKey] as string;
 
     // Fallback Aliases
     if (lowerKey === "your name" || lowerKey === "my name")
       return (contact["Sender Name"] as string) || "";
-    if (lowerKey === "contact name") return (contact["name"] as string) || "";
+    if (lowerKey === "contact name") return (contact.name as string) || "";
     if (lowerKey === "role") return (contact["Sender Role"] as string) || "";
     if (lowerKey === "major") return (contact["Sender Major"] as string) || "";
-    if (lowerKey === "phone number")
-      return (contact["Sender Phone"] as string) || "";
-    if (lowerKey === "company name")
-      return (contact["Company"] as string) || "";
+    if (lowerKey === "phone number") return (contact["Sender Phone"] as string) || "";
+    if (lowerKey === "company name") return (contact.Company as string) || "";
 
     // Derived Aliases
     if (lowerKey === "first name" || lowerKey === "contact first name") {
-      const fullName = (contact["name"] as string) || "";
+      const fullName = (contact.name as string) || "";
       return fullName.split(" ")[0] || "";
     }
 
@@ -257,9 +252,7 @@ export function validateTemplate(
     const lowerVar = variable.toLowerCase();
 
     // Case-insensitive direct match
-    const hasDirectField = Array.from(availableFields).some(
-      (f) => f.toLowerCase() === lowerVar,
-    );
+    const hasDirectField = Array.from(availableFields).some((f) => f.toLowerCase() === lowerVar);
 
     const hasAlias =
       ((lowerVar === "your name" || lowerVar === "my name") &&
@@ -274,9 +267,7 @@ export function validateTemplate(
         Array.from(availableFields).some((f) => f.toLowerCase() === "company"));
 
     if (!hasDirectField && !hasAlias) {
-      errors.push(
-        `Variable "{{${variable}}}" is not available in contact data`,
-      );
+      errors.push(`Variable "{{${variable}}}" is not available in contact data`);
     }
   });
 
@@ -287,15 +278,24 @@ export function validateTemplate(
       const lowerVar = variable.toLowerCase();
       // Skip variables we know resolve via aliases or derivation
       const knownAliases = [
-        "first name", "contact first name", "your name", "my name",
-        "contact name", "role", "major", "phone number", "company name",
-        "sender name", "sender role", "sender major", "sender phone", "sender email",
+        "first name",
+        "contact first name",
+        "your name",
+        "my name",
+        "contact name",
+        "role",
+        "major",
+        "phone number",
+        "company name",
+        "sender name",
+        "sender role",
+        "sender major",
+        "sender phone",
+        "sender email",
       ];
       if (knownAliases.includes(lowerVar)) return;
 
-      const directKey = Object.keys(sampleContact).find(
-        (k) => k.toLowerCase() === lowerVar,
-      );
+      const directKey = Object.keys(sampleContact).find((k) => k.toLowerCase() === lowerVar);
       if (directKey && !sampleContact[directKey]) {
         warnings.push(
           `"{{${variable}}}" is empty for ${sampleContact.name || sampleContact.email}`,
@@ -323,10 +323,7 @@ export function getSubjectsForTemplate(template: Template): string[] {
   return DEFAULT_SUBJECTS;
 }
 
-export function getSubjectForContactIndex(
-  template: Template,
-  index: number,
-): string {
+export function getSubjectForContactIndex(template: Template, index: number): string {
   const subjects = getSubjectsForTemplate(template);
   return subjects[index % subjects.length];
 }
@@ -351,17 +348,14 @@ export function formatEmailBodyHtml(body: string): string {
   // Since we just converted \n to <br>, we must match the signature against <br> tags.
   const signatureRegex =
     /^(.*?)<br>CU Hyperloop\s*\|\s*(.*?)<br>CU Boulder\s*\|\s*(.*?)<br>(.*?\|.*?)$/gm;
-  htmlBody = htmlBody.replace(
-    signatureRegex,
-    (_match, name, role, major, contactDetails) => {
-      return `<div style="font-family: Arial, sans-serif; line-height: 1.2; margin-top: 12px; margin-bottom: 0;">
+  htmlBody = htmlBody.replace(signatureRegex, (_match, name, role, major, contactDetails) => {
+    return `<div style="font-family: Arial, sans-serif; line-height: 1.2; margin-top: 12px; margin-bottom: 0;">
   <span style="font-size: 15px;">${escapeHtml(name.trim())}</span><br>
   <span style="font-size: 14px;"><strong style="color: #CFB87C;">CU Hyperloop</strong> <span style="color: #6B7280;">| ${escapeHtml(role.trim())}</span></span><br>
   <span style="font-size: 14px;"><strong style="color: #CFB87C;">CU Boulder</strong> <span style="color: #6B7280;">| ${escapeHtml(major.trim())}</span></span><br>
   <span style="font-size: 14px; color: #6B7280;">${escapeHtml(contactDetails.trim())}</span>
 </div>`;
-    },
-  );
+  });
 
   return htmlBody;
 }
@@ -375,10 +369,7 @@ export function sanitizeTemplate(template: string): string {
   let sanitized = template;
 
   // Remove script tags
-  sanitized = sanitized.replace(
-    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-    "",
-  );
+  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 
   // Remove javascript: URLs
   sanitized = sanitized.replace(/javascript:/gi, "");

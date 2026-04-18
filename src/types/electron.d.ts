@@ -8,16 +8,22 @@ declare global {
       getUserProfile: () => Promise<{ displayName: string; email: string } | null>;
       refreshToken: (refreshToken: string) => Promise<any>;
       logout: () => Promise<boolean>;
-      handleRedirect: (url: string, authContext?: { codeVerifier?: string; state?: string }) => Promise<any>;
+      handleRedirect: (
+        url: string,
+        authContext?: { codeVerifier?: string; state?: string },
+      ) => Promise<any>;
       openExternal: (url: string) => Promise<void>;
-      companySearch: (query: string, filters?: {
-        industry?: string;
-        size?: string;
-        location?: string;
-        excludeNames?: string[];
-        campaignDescription?: string;
-        refinement?: string;
-      }) => Promise<{
+      companySearch: (
+        query: string,
+        filters?: {
+          industry?: string;
+          size?: string;
+          location?: string;
+          excludeNames?: string[];
+          campaignDescription?: string;
+          refinement?: string;
+        },
+      ) => Promise<{
         companies: Array<{
           name: string;
           website: string;
@@ -28,13 +34,22 @@ declare global {
           relevanceScore?: number;
         }>;
       }>;
-      emailGuess: (fullName: string, domain: string, knownContacts: { name: string; email: string }[]) => Promise<any>;
+      emailGuess: (
+        fullName: string,
+        domain: string,
+        knownContacts: { name: string; email: string }[],
+      ) => Promise<any>;
       emailBacktest: (contacts: { name: string; email: string }[]) => Promise<any>;
       emailVerifyMx: (domain: string) => Promise<any>;
       emailParseLinkedin: (url: string) => Promise<any>;
       emailDetectPattern: (contacts: { name: string; email: string }[]) => Promise<any>;
       emailResolveDomain: (companyName: string) => Promise<any>;
-      checkScopes: () => Promise<{ signedIn: boolean; granted?: string[]; missing: string[]; error?: string }>;
+      checkScopes: () => Promise<{
+        signedIn: boolean;
+        granted?: string[];
+        missing: string[];
+        error?: string;
+      }>;
       dispatchRun: (payload: {
         runId: string;
         recipients: Array<{
@@ -46,7 +61,7 @@ declare global {
           bodyHtml: string;
         }>;
         attachment?: { name: string; mime: string; base64: string };
-        mode: 'draft' | 'send-now' | 'schedule';
+        mode: "draft" | "send-now" | "schedule";
         staggerSeconds: number;
         scheduledForIso?: string;
         campaignId?: string;
@@ -55,7 +70,14 @@ declare global {
       }) => Promise<{
         submitted: number;
         failed: number;
-        results: Array<{ recipientId: string; ok: boolean; messageId?: string; conversationId?: string; internetMessageId?: string; error?: string }>;
+        results: Array<{
+          recipientId: string;
+          ok: boolean;
+          messageId?: string;
+          conversationId?: string;
+          internetMessageId?: string;
+          error?: string;
+        }>;
       }>;
       onDispatchProgress: (
         runId: string,
@@ -111,16 +133,36 @@ declare global {
           receivedDateTime: string;
         }>;
       }>;
-      dbMarkDelivered: (match: { internetMessageId?: string; conversationId?: string; toEmail?: string; identityEmail: string; sentAt: string }) => Promise<{ updated: number }>;
-      dbMarkBounced: (match: { failedRecipients: string[]; identityEmail: string; diagnostic?: string }) => Promise<{ updated: number }>;
+      dbMarkDelivered: (match: {
+        internetMessageId?: string;
+        conversationId?: string;
+        toEmail?: string;
+        identityEmail: string;
+        sentAt: string;
+      }) => Promise<{ updated: number }>;
+      dbMarkBounced: (match: {
+        failedRecipients: string[];
+        identityEmail: string;
+        diagnostic?: string;
+      }) => Promise<{ updated: number }>;
       onSendDraftsProgress: (
         runId: string,
-        callback: (event: { index: number; total: number; result: { messageId: string; ok: boolean; error?: string } }) => void,
+        callback: (event: {
+          index: number;
+          total: number;
+          result: { messageId: string; ok: boolean; error?: string };
+        }) => void,
       ) => () => void;
-      onAuthCompleted: (callback: (result: { success: boolean; message?: string }) => void) => () => void;
+      onAuthCompleted: (
+        callback: (result: { success: boolean; message?: string }) => void,
+      ) => () => void;
       dbRecordReplies: (replies: any[]) => Promise<{ inserted: any[]; all: any[] }>;
       dbListReplies: (filter?: { identityEmail?: string }) => Promise<any[]>;
-      dbListRecipients: (filter?: { identityEmail?: string; runId?: string; campaignId?: string }) => Promise<any[]>;
+      dbListRecipients: (filter?: {
+        identityEmail?: string;
+        runId?: string;
+        campaignId?: string;
+      }) => Promise<any[]>;
       dbListRuns: (filter?: { identityEmail?: string }) => Promise<any[]>;
       dbMetrics: (filter?: { identityEmail?: string }) => Promise<{
         total: number;
@@ -135,14 +177,21 @@ declare global {
       dbMarkReplySeen: (id: string) => Promise<boolean>;
       dbMarkAllRepliesSeen: (identityEmail?: string) => Promise<boolean>;
       dbGetDeltaToken: (identityEmail: string, folder: string) => Promise<string | null>;
-      dbSetDeltaToken: (identityEmail: string, folder: string, deltaLink: string) => Promise<boolean>;
+      dbSetDeltaToken: (
+        identityEmail: string,
+        folder: string,
+        deltaLink: string,
+      ) => Promise<boolean>;
       dbClearDeltaToken: (identityEmail: string, folder: string) => Promise<boolean>;
       dbIsMigrated: () => Promise<boolean>;
       dbRunMigration: (dump: any) => Promise<any>;
       reclassifyReply: (replyId: string) => Promise<any>;
       dbListCampaigns: (filter?: { identityEmail?: string; sinceIso?: string }) => Promise<any[]>;
       dbRecentActivity: (filter?: { identityEmail?: string; limit?: number }) => Promise<any[]>;
-      dbTimeline: (filter?: { identityEmail?: string; days?: number }) => Promise<Array<{ bucket: string; sends: number; replies: number }>>;
+      dbTimeline: (filter?: {
+        identityEmail?: string;
+        days?: number;
+      }) => Promise<Array<{ bucket: string; sends: number; replies: number }>>;
     };
   }
 }

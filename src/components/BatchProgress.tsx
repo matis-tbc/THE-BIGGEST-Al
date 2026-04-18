@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
-import { BatchProcessor, Contact, SendOptions } from "../services/batchProcessor";
-import { SendOptionsPanel, SendOptionsValue } from "./SendOptionsPanel";
+import type React from "react";
+import { useState, useEffect, useRef } from "react";
+import { BatchProcessor, type Contact, type SendOptions } from "../services/batchProcessor";
+import { SendOptionsPanel, type SendOptionsValue } from "./SendOptionsPanel";
 
 interface Template {
   id: string;
@@ -48,7 +49,9 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
   const [draftScheduledLocal, setDraftScheduledLocal] = useState<string>("");
   const [draftSendMode, setDraftSendMode] = useState<"now" | "schedule">("now");
   const [isSendingDrafts, setIsSendingDrafts] = useState(false);
-  const [draftsSentResult, setDraftsSentResult] = useState<{ sent: number; failed: number } | null>(null);
+  const [draftsSentResult, setDraftsSentResult] = useState<{ sent: number; failed: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!processorRef.current) {
@@ -113,13 +116,8 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
           latestResults = results;
           setStatuses([...results]);
 
-          const processed = results.filter(
-            (r) => r.status !== "pending",
-          ).length;
-          const batch = Math.min(
-            totalBatches || 1,
-            Math.max(1, Math.ceil(processed / 4)),
-          );
+          const processed = results.filter((r) => r.status !== "pending").length;
+          const batch = Math.min(totalBatches || 1, Math.max(1, Math.ceil(processed / 4)));
           setCurrentBatch(batch);
         },
       );
@@ -137,9 +135,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
     } catch (err) {
       console.error("Processing error:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to process contacts. Please try again.",
+        err instanceof Error ? err.message : "Failed to process contacts. Please try again.",
       );
       setIsProcessing(false);
     }
@@ -157,10 +153,13 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
   if (contacts.length > 0) {
     if (attachment) {
       // 2 phases: Draft creation (1 point) + Attachment Upload (1 point) per contact
-      const draftPoints = statuses.filter(s => ["drafted", "attaching", "completed"].includes(s.status)).length;
+      const draftPoints = statuses.filter((s) =>
+        ["drafted", "attaching", "completed"].includes(s.status),
+      ).length;
       const attachPoints = completedCount;
       const failPoints = failedCount * 2; // Failed counts as fully processed for percentage purposes
-      progressPercentage = ((draftPoints + attachPoints + failPoints) / (contacts.length * 2)) * 100;
+      progressPercentage =
+        ((draftPoints + attachPoints + failPoints) / (contacts.length * 2)) * 100;
     } else {
       progressPercentage = ((completedCount + failedCount) / contacts.length) * 100;
     }
@@ -186,9 +185,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-100 mb-2">
-          Generating Campaign
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-100 mb-2">Generating Campaign</h2>
         <p className="text-gray-400">
           {currentPhase} ({contacts.length} total contacts)
         </p>
@@ -201,8 +198,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
           <span className="text-sm text-gray-400">
             {attachment
               ? `${completedCount + failedCount === contacts.length ? contacts.length : draftedCount + attachingCount + completedCount + failedCount} of ${contacts.length} Drafts Created`
-              : `Batch ${currentBatch} of ${totalBatches}`
-            }
+              : `Batch ${currentBatch} of ${totalBatches}`}
           </span>
         </div>
 
@@ -210,13 +206,13 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
         <div className="mb-4">
           <div className="flex justify-between text-sm text-gray-400 mb-2">
             <span>
-              {attachment ? (
-                completedCount + failedCount === contacts.length
+              {attachment
+                ? completedCount + failedCount === contacts.length
                   ? `${completedCount + failedCount} of ${contacts.length} fully completed`
                   : attachingCount > 0 || draftedCount > 0 || completedCount > 0
                     ? `${completedCount + failedCount} of ${contacts.length} uploaded`
                     : `${draftedCount} of ${contacts.length} drafted`
-              ) : `${completedCount + failedCount} of ${contacts.length} processed`}
+                : `${completedCount + failedCount} of ${contacts.length} processed`}
             </span>
             <span>{Math.round(progressPercentage)}%</span>
           </div>
@@ -229,7 +225,9 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
         </div>
 
         {/* Status Counts */}
-        <div className={`grid gap-4 text-center ${attachment ? 'grid-cols-3 md:grid-cols-6' : 'grid-cols-4'}`}>
+        <div
+          className={`grid gap-4 text-center ${attachment ? "grid-cols-3 md:grid-cols-6" : "grid-cols-4"}`}
+        >
           <div className="bg-gray-700 rounded-lg p-3">
             <div className="text-2xl font-bold text-gray-400">{pendingCount}</div>
             <div className="text-sm text-gray-400">Pending</div>
@@ -275,10 +273,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
               if (!contact) return null;
 
               return (
-                <div
-                  key={status.contactId}
-                  className="px-4 py-3 flex items-center justify-between"
-                >
+                <div key={status.contactId} className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
                       {status.status === "completed" && (
@@ -334,7 +329,16 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
                         </svg>
                       )}
                       {status.status === "drafted" && (
-                        <svg className="h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          className="h-5 w-5 text-indigo-400"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
                           <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                       )}
@@ -343,9 +347,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
                       )}
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-100">
-                        {contact.name}
-                      </p>
+                      <p className="text-sm font-medium text-gray-100">{contact.name}</p>
                       <p className="text-sm text-gray-400">{contact.email}</p>
                     </div>
                   </div>
@@ -375,115 +377,129 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
       )}
 
       {/* Post-draft send-all action */}
-      {!isProcessing && lastRunMode === "draft" && (() => {
-        const draftMessageIds = statuses.filter(s => s.messageId && s.status === "completed").map(s => s.messageId!) as string[];
-        if (draftMessageIds.length === 0) return null;
-        if (draftsSentResult) {
+      {!isProcessing &&
+        lastRunMode === "draft" &&
+        (() => {
+          const draftMessageIds = statuses
+            .filter((s) => s.messageId && s.status === "completed")
+            .map((s) => s.messageId!) as string[];
+          if (draftMessageIds.length === 0) return null;
+          if (draftsSentResult) {
+            return (
+              <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                Sent {draftsSentResult.sent} of {draftsSentResult.sent + draftsSentResult.failed}{" "}
+                drafts.
+                {draftsSentResult.failed > 0 && " Check Outlook Drafts/Sent for details."}
+              </div>
+            );
+          }
+          const sendAll = async () => {
+            if (!window.electronAPI) return;
+            let scheduledForIso: string | undefined;
+            if (draftSendMode === "schedule") {
+              if (!draftScheduledLocal) {
+                setError("Pick a send time for the scheduled drafts.");
+                return;
+              }
+              const ms = new Date(draftScheduledLocal).getTime();
+              if (ms <= Date.now() + 60 * 1000) {
+                setError("Scheduled time must be at least 1 minute in the future.");
+                return;
+              }
+              scheduledForIso = new Date(draftScheduledLocal).toISOString();
+            }
+            setIsSendingDrafts(true);
+            setError(null);
+            try {
+              const res = await window.electronAPI.sendDrafts({
+                runId: lastRunId,
+                messageIds: draftMessageIds,
+                staggerSeconds: draftStaggerSeconds,
+                scheduledForIso,
+              });
+              setDraftsSentResult({ sent: res.sent, failed: res.failed });
+            } catch (e: any) {
+              setError(e?.message || String(e));
+            } finally {
+              setIsSendingDrafts(false);
+            }
+          };
           return (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-              Sent {draftsSentResult.sent} of {draftsSentResult.sent + draftsSentResult.failed} drafts.
-              {draftsSentResult.failed > 0 && " Check Outlook Drafts/Sent for details."}
+            <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <div className="text-sm text-slate-200">
+                <span className="font-medium">{draftMessageIds.length}</span> drafts created. You
+                can review them in Outlook Drafts before sending, then send them all from here.
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex rounded-md border border-slate-700 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setDraftSendMode("now")}
+                    className={`px-3 py-1.5 text-xs ${draftSendMode === "now" ? "bg-sky-500/20 text-sky-200" : "text-slate-300 hover:bg-slate-800"}`}
+                  >
+                    Send now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftSendMode("schedule")}
+                    className={`px-3 py-1.5 text-xs border-l border-slate-700 ${draftSendMode === "schedule" ? "bg-sky-500/20 text-sky-200" : "text-slate-300 hover:bg-slate-800"}`}
+                  >
+                    Schedule
+                  </button>
+                </div>
+                {draftSendMode === "schedule" && (
+                  <input
+                    type="datetime-local"
+                    value={draftScheduledLocal}
+                    onChange={(e) => setDraftScheduledLocal(e.target.value)}
+                    className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:border-sky-400 focus:outline-none"
+                  />
+                )}
+                <label className="text-xs text-slate-400">
+                  Stagger
+                  <input
+                    type="number"
+                    min={0}
+                    max={600}
+                    step={5}
+                    value={draftStaggerSeconds}
+                    onChange={(e) =>
+                      setDraftStaggerSeconds(
+                        Math.max(0, Math.min(600, Number(e.target.value) || 0)),
+                      )
+                    }
+                    className="ml-2 w-20 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:border-sky-400 focus:outline-none"
+                  />
+                  <span className="ml-1 text-slate-500">sec</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={sendAll}
+                  disabled={isSendingDrafts}
+                  className="ml-auto rounded-md bg-sky-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-400 disabled:opacity-50"
+                >
+                  {isSendingDrafts
+                    ? "Sending..."
+                    : draftSendMode === "schedule"
+                      ? `Schedule ${draftMessageIds.length} drafts`
+                      : `Send ${draftMessageIds.length} drafts now`}
+                </button>
+              </div>
+              <div className="text-[11px] text-slate-500">
+                {draftStaggerSeconds > 0 || draftSendMode === "schedule"
+                  ? "Routes through Outlook deferred delivery. App can quit after submit."
+                  : "Sends back-to-back from this app while it stays open."}
+              </div>
             </div>
           );
-        }
-        const sendAll = async () => {
-          if (!window.electronAPI) return;
-          let scheduledForIso: string | undefined;
-          if (draftSendMode === "schedule") {
-            if (!draftScheduledLocal) {
-              setError("Pick a send time for the scheduled drafts.");
-              return;
-            }
-            const ms = new Date(draftScheduledLocal).getTime();
-            if (ms <= Date.now() + 60 * 1000) {
-              setError("Scheduled time must be at least 1 minute in the future.");
-              return;
-            }
-            scheduledForIso = new Date(draftScheduledLocal).toISOString();
-          }
-          setIsSendingDrafts(true);
-          setError(null);
-          try {
-            const res = await window.electronAPI.sendDrafts({
-              runId: lastRunId,
-              messageIds: draftMessageIds,
-              staggerSeconds: draftStaggerSeconds,
-              scheduledForIso,
-            });
-            setDraftsSentResult({ sent: res.sent, failed: res.failed });
-          } catch (e: any) {
-            setError(e?.message || String(e));
-          } finally {
-            setIsSendingDrafts(false);
-          }
-        };
-        return (
-          <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-            <div className="text-sm text-slate-200">
-              <span className="font-medium">{draftMessageIds.length}</span> drafts created. You can review them in Outlook Drafts before sending, then send them all from here.
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex rounded-md border border-slate-700 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setDraftSendMode("now")}
-                  className={`px-3 py-1.5 text-xs ${draftSendMode === "now" ? "bg-sky-500/20 text-sky-200" : "text-slate-300 hover:bg-slate-800"}`}
-                >Send now</button>
-                <button
-                  type="button"
-                  onClick={() => setDraftSendMode("schedule")}
-                  className={`px-3 py-1.5 text-xs border-l border-slate-700 ${draftSendMode === "schedule" ? "bg-sky-500/20 text-sky-200" : "text-slate-300 hover:bg-slate-800"}`}
-                >Schedule</button>
-              </div>
-              {draftSendMode === "schedule" && (
-                <input
-                  type="datetime-local"
-                  value={draftScheduledLocal}
-                  onChange={(e) => setDraftScheduledLocal(e.target.value)}
-                  className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:border-sky-400 focus:outline-none"
-                />
-              )}
-              <label className="text-xs text-slate-400">
-                Stagger
-                <input
-                  type="number"
-                  min={0}
-                  max={600}
-                  step={5}
-                  value={draftStaggerSeconds}
-                  onChange={(e) => setDraftStaggerSeconds(Math.max(0, Math.min(600, Number(e.target.value) || 0)))}
-                  className="ml-2 w-20 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:border-sky-400 focus:outline-none"
-                />
-                <span className="ml-1 text-slate-500">sec</span>
-              </label>
-              <button
-                type="button"
-                onClick={sendAll}
-                disabled={isSendingDrafts}
-                className="ml-auto rounded-md bg-sky-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-400 disabled:opacity-50"
-              >
-                {isSendingDrafts ? "Sending..." : draftSendMode === "schedule" ? `Schedule ${draftMessageIds.length} drafts` : `Send ${draftMessageIds.length} drafts now`}
-              </button>
-            </div>
-            <div className="text-[11px] text-slate-500">
-              {draftStaggerSeconds > 0 || draftSendMode === "schedule"
-                ? "Routes through Outlook deferred delivery. App can quit after submit."
-                : "Sends back-to-back from this app while it stays open."}
-            </div>
-          </div>
-        );
-      })()}
+        })()}
 
       {/* Error Display */}
       {error && (
         <div className="bg-red-900/30 border border-red-800 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-red-300"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
+              <svg className="h-5 w-5 text-red-300" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
                   d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -508,10 +524,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
           Back
         </button>
         {!isProcessing && completedCount + failedCount === contacts.length ? (
-          <button
-            onClick={() => onComplete(operationId, statuses)}
-            className="btn-primary"
-          >
+          <button onClick={() => onComplete(operationId, statuses)} className="btn-primary">
             Review Results
           </button>
         ) : (

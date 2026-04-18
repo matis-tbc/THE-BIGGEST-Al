@@ -33,14 +33,8 @@ export interface ProjectStore {
       Partial<Pick<StoredTemplate, "createdAt" | "updatedAt">>,
   ): Promise<StoredTemplate>;
   deleteTemplate(templateId: string): Promise<void>;
-  createTemplateVersion(
-    templateId: string,
-    content: string,
-  ): Promise<StoredTemplate | null>;
-  restoreTemplateVersion(
-    templateId: string,
-    versionId: string,
-  ): Promise<StoredTemplate | null>;
+  createTemplateVersion(templateId: string, content: string): Promise<StoredTemplate | null>;
+  restoreTemplateVersion(templateId: string, versionId: string): Promise<StoredTemplate | null>;
 
   saveProject(snapshot: StoredProjectSnapshot): Promise<void>;
   loadProject(projectId: string): Promise<StoredProjectSnapshot | null>;
@@ -63,10 +57,7 @@ import { defaultTemplates } from "../utils/defaultTemplates";
 
 export class LocalProjectStore implements ProjectStore {
   async listTemplates(): Promise<StoredTemplate[]> {
-    let templates = safeParse<StoredTemplate[]>(
-      window.localStorage.getItem(TEMPLATE_KEY),
-      [],
-    );
+    let templates = safeParse<StoredTemplate[]>(window.localStorage.getItem(TEMPLATE_KEY), []);
 
     // Auto-seed to replace outdated variables in localStorage automatically
     // And completely scrub older templates that got duplicated
@@ -77,9 +68,7 @@ export class LocalProjectStore implements ProjectStore {
     }
 
     // Actively filter out the duplicates that have "Monetary Outreach -" prefix
-    templates = templates.filter(
-      (t) => !t.name.startsWith("Monetary Outreach -"),
-    );
+    templates = templates.filter((t) => !t.name.startsWith("Monetary Outreach -"));
 
     return templates.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
@@ -111,10 +100,7 @@ export class LocalProjectStore implements ProjectStore {
     window.localStorage.setItem(TEMPLATE_KEY, JSON.stringify(next));
   }
 
-  async createTemplateVersion(
-    templateId: string,
-    content: string,
-  ): Promise<StoredTemplate | null> {
+  async createTemplateVersion(templateId: string, content: string): Promise<StoredTemplate | null> {
     const templates = await this.listTemplates();
     const match = templates.find((template) => template.id === templateId);
     if (!match) return null;

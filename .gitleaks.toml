@@ -1,0 +1,30 @@
+title = "emaildrafter gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist for test fixtures and non-secret placeholders"
+paths = [
+  '''sample-contacts\.csv''',
+  '''test-contacts\.csv''',
+  '''sample-template\.txt''',
+  '''test-template\.txt''',
+  '''\.env\.example''',
+]
+regexes = [
+  '''changeme|your[_-]?api[_-]?key|placeholder|example\.com''',
+]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[a-zA-Z0-9\-_]{90,}'''
+tags = ["key", "anthropic"]
+
+[[rules]]
+id = "azure-client-secret"
+description = "Azure AD client secret (value form)"
+regex = '''[a-zA-Z0-9~._\-]{34,40}'''
+path = '''\.env'''
+tags = ["azure", "oauth"]

@@ -1,4 +1,4 @@
-import { GraphClientService } from './graphClient';
+import type { GraphClientService } from "./graphClient";
 
 export class AttachmentHandler {
   private graphService: GraphClientService;
@@ -14,14 +14,13 @@ export class AttachmentHandler {
       const uploadUrl = await this.graphService.createUploadSession(
         messageId,
         file.name,
-        file.size
+        file.size,
       );
 
       // Upload file in chunks
       await this.uploadFileInChunks(uploadUrl, file);
-
     } catch (error) {
-      console.error('File attachment failed:', error);
+      console.error("File attachment failed:", error);
       throw error;
     }
   }
@@ -41,14 +40,14 @@ export class AttachmentHandler {
           chunk,
           uploadedBytes,
           chunkEnd,
-          totalSize
+          totalSize,
         );
 
         uploadedBytes = chunkEnd + 1;
 
         // Add small delay between chunks to avoid rate limiting
         if (uploadedBytes < totalSize) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
       } catch (error) {
         console.error(`Chunk upload failed (bytes ${uploadedBytes}-${chunkEnd}):`, error);
@@ -57,8 +56,11 @@ export class AttachmentHandler {
     }
   }
 
-  async attachFileToMultipleDrafts(messageIds: string[], file: File): Promise<Array<{ messageId: string, success: boolean, error?: string }>> {
-    const results: Array<{ messageId: string, success: boolean, error?: string }> = [];
+  async attachFileToMultipleDrafts(
+    messageIds: string[],
+    file: File,
+  ): Promise<Array<{ messageId: string; success: boolean; error?: string }>> {
+    const results: Array<{ messageId: string; success: boolean; error?: string }> = [];
 
     // Process attachments sequentially to prevent MailboxConcurrency errors
     const concurrency = 1;
@@ -74,7 +76,7 @@ export class AttachmentHandler {
           return {
             messageId,
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : "Unknown error",
           };
         }
       });
@@ -83,7 +85,7 @@ export class AttachmentHandler {
       results.push(...chunkResults);
 
       // Artificial delay to prevent Graph from maintaining multiple locks
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     return results;
@@ -98,11 +100,11 @@ export class AttachmentHandler {
   }
 
   formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
   }
 
   isLargeFile(file: File): boolean {

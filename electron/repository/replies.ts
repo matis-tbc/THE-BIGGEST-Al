@@ -1,5 +1,5 @@
-import { getDb } from '../db';
-import { findByConversationId } from './recipients';
+import { getDb } from "../db";
+import { findByConversationId } from "./recipients";
 
 export interface ReplyRow {
   id: string;
@@ -33,7 +33,7 @@ export interface InsertReplyInput {
 
 export function insertReplyIfNew(input: InsertReplyInput): ReplyRow | null {
   const db = getDb();
-  const exists = db.prepare('SELECT 1 FROM replies WHERE id = ?').get(input.id);
+  const exists = db.prepare("SELECT 1 FROM replies WHERE id = ?").get(input.id);
   if (exists) return null;
   const recipient = findByConversationId(input.conversationId);
   db.prepare(`
@@ -56,25 +56,30 @@ export function insertReplyIfNew(input: InsertReplyInput): ReplyRow | null {
     rawBody: input.rawBody ?? null,
     receivedAt: input.receivedAt,
   });
-  return db.prepare('SELECT * FROM replies WHERE id = ?').get(input.id) as ReplyRow;
+  return db.prepare("SELECT * FROM replies WHERE id = ?").get(input.id) as ReplyRow;
 }
 
 export function listReplies(filter?: { identityEmail?: string }): ReplyRow[] {
   const where: string[] = [];
   const params: any = {};
-  if (filter?.identityEmail) { where.push('identity_email = @identityEmail'); params.identityEmail = filter.identityEmail.toLowerCase(); }
-  const sql = `SELECT * FROM replies ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_at DESC`;
+  if (filter?.identityEmail) {
+    where.push("identity_email = @identityEmail");
+    params.identityEmail = filter.identityEmail.toLowerCase();
+  }
+  const sql = `SELECT * FROM replies ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY received_at DESC`;
   return getDb().prepare(sql).all(params) as ReplyRow[];
 }
 
 export function markSeen(id: string): void {
-  getDb().prepare('UPDATE replies SET seen = 1 WHERE id = ?').run(id);
+  getDb().prepare("UPDATE replies SET seen = 1 WHERE id = ?").run(id);
 }
 
 export function markAllSeen(identityEmail?: string): void {
   if (identityEmail) {
-    getDb().prepare('UPDATE replies SET seen = 1 WHERE identity_email = ?').run(identityEmail.toLowerCase());
+    getDb()
+      .prepare("UPDATE replies SET seen = 1 WHERE identity_email = ?")
+      .run(identityEmail.toLowerCase());
   } else {
-    getDb().prepare('UPDATE replies SET seen = 1').run();
+    getDb().prepare("UPDATE replies SET seen = 1").run();
   }
 }

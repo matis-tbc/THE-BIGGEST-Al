@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
 
 export type SendMode = "draft" | "send-now" | "schedule";
 
@@ -16,9 +17,21 @@ interface SendOptionsPanelProps {
 }
 
 const MODE_OPTIONS: Array<{ id: SendMode; label: string; description: string }> = [
-  { id: "draft", label: "Draft", description: "Create drafts in Outlook for manual review and sending." },
-  { id: "send-now", label: "Send now", description: "Send immediately. With a stagger, sends from Microsoft's cloud, app can quit." },
-  { id: "schedule", label: "Schedule", description: "Send at a future time. Held server-side, app can quit." },
+  {
+    id: "draft",
+    label: "Draft",
+    description: "Create drafts in Outlook for manual review and sending.",
+  },
+  {
+    id: "send-now",
+    label: "Send now",
+    description: "Send immediately. With a stagger, sends from Microsoft's cloud, app can quit.",
+  },
+  {
+    id: "schedule",
+    label: "Schedule",
+    description: "Send at a future time. Held server-side, app can quit.",
+  },
 ];
 
 function localToUtcIso(localValue: string): string {
@@ -53,8 +66,10 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
     ]);
     setAccountEmail(profile?.email || null);
     setAccountName(profile?.displayName || null);
-    if (scopeCheck && scopeCheck.missing && scopeCheck.missing.length > 0) {
-      setScopeWarning(`Missing permissions: ${scopeCheck.missing.join(", ")}. Sign out and back in to re-consent.`);
+    if (scopeCheck?.missing && scopeCheck.missing.length > 0) {
+      setScopeWarning(
+        `Missing permissions: ${scopeCheck.missing.join(", ")}. Sign out and back in to re-consent.`,
+      );
     } else {
       setScopeWarning(null);
     }
@@ -65,7 +80,7 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
     if (!value) {
       onChange({ mode: "draft", staggerSeconds: 0 });
     }
-  }, []);
+  }, [loadAccount, value, onChange]);
 
   const switchAccount = async () => {
     if (!window.electronAPI) return;
@@ -84,7 +99,7 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
       loadAccount();
     });
     return off;
-  }, []);
+  }, [loadAccount]);
 
   const current: SendOptionsValue = value || {
     mode: "draft",
@@ -100,7 +115,9 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
   const totalMinutes = Math.round(totalSeconds / 6) / 10;
 
   const isHyperloop = (accountEmail || "").toLowerCase().startsWith("cuhyperloop@");
-  const accountBadge = isHyperloop ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" : "bg-sky-500/20 text-sky-300 border-sky-500/40";
+  const accountBadge = isHyperloop
+    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+    : "bg-sky-500/20 text-sky-300 border-sky-500/40";
 
   const showSchedule = current.mode === "schedule";
   const showStagger = current.mode === "send-now" || current.mode === "schedule";
@@ -115,16 +132,16 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
 
       <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2">
         <div className="flex items-center gap-3 min-w-0">
-          <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border flex-shrink-0 ${accountBadge}`}>
+          <span
+            className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border flex-shrink-0 ${accountBadge}`}
+          >
             {isHyperloop ? "Hyperloop" : "Personal"}
           </span>
           <div className="flex flex-col min-w-0">
             <span className="text-sm font-medium text-slate-100 truncate">
               {accountName || "(loading...)"}
             </span>
-            <span className="text-xs text-slate-400 truncate">
-              {accountEmail || ""}
-            </span>
+            <span className="text-xs text-slate-400 truncate">{accountEmail || ""}</span>
           </div>
         </div>
         <button
@@ -157,7 +174,9 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
                 } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <div className="text-sm font-medium text-slate-100">{opt.label}</div>
-                <div className="mt-1 text-[11px] text-slate-400 leading-snug">{opt.description}</div>
+                <div className="mt-1 text-[11px] text-slate-400 leading-snug">
+                  {opt.description}
+                </div>
               </button>
             );
           })}
@@ -197,7 +216,9 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
               max={600}
               step={5}
               value={stagger}
-              onChange={(e) => update({ staggerSeconds: Math.max(0, Math.min(600, Number(e.target.value) || 0)) })}
+              onChange={(e) =>
+                update({ staggerSeconds: Math.max(0, Math.min(600, Number(e.target.value) || 0)) })
+              }
               disabled={disabled}
               className="w-24 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 focus:border-sky-400 focus:outline-none"
             />

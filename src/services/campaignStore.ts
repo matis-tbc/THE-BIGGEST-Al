@@ -1,4 +1,4 @@
-import { Contact } from '../App';
+import type { Contact } from "../App";
 
 export interface GeneratedCompany {
   id: string;
@@ -27,7 +27,7 @@ export interface Campaign {
   id: string;
   name: string;
   description: string;
-  status: 'active' | 'completed' | 'archived';
+  status: "active" | "completed" | "archived";
   createdAt: string;
   updatedAt: string;
   companies: GeneratedCompany[];
@@ -36,7 +36,7 @@ export interface Campaign {
   runs: CampaignRun[];
 }
 
-const CAMPAIGN_KEY = 'email-drafter.campaigns.v1';
+const CAMPAIGN_KEY = "email-drafter.campaigns.v1";
 
 function safeParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -61,12 +61,12 @@ class LocalCampaignStore {
   }
 
   getCampaign(id: string): Campaign | null {
-    return this.load().find(c => c.id === id) || null;
+    return this.load().find((c) => c.id === id) || null;
   }
 
   saveCampaign(campaign: Campaign): Campaign {
     const campaigns = this.load();
-    const next = campaigns.filter(c => c.id !== campaign.id);
+    const next = campaigns.filter((c) => c.id !== campaign.id);
     next.push({ ...campaign, updatedAt: new Date().toISOString() });
     this.save(next);
     return campaign;
@@ -74,14 +74,14 @@ class LocalCampaignStore {
 
   deleteCampaign(id: string): void {
     const campaigns = this.load();
-    this.save(campaigns.filter(c => c.id !== id));
+    this.save(campaigns.filter((c) => c.id !== id));
   }
 
   addCompanies(id: string, companies: GeneratedCompany[]): Campaign | null {
     const campaign = this.getCampaign(id);
     if (!campaign) return null;
-    const existingNames = new Set(campaign.companies.map(c => c.name.toLowerCase()));
-    const newCompanies = companies.filter(c => !existingNames.has(c.name.toLowerCase()));
+    const existingNames = new Set(campaign.companies.map((c) => c.name.toLowerCase()));
+    const newCompanies = companies.filter((c) => !existingNames.has(c.name.toLowerCase()));
     campaign.companies = [...campaign.companies, ...newCompanies];
     campaign.updatedAt = new Date().toISOString();
     return this.saveCampaign(campaign);
@@ -111,7 +111,10 @@ class LocalCampaignStore {
     return this.saveCampaign(campaign);
   }
 
-  updateCampaign(id: string, partial: Partial<Pick<Campaign, 'name' | 'description' | 'status'>>): Campaign | null {
+  updateCampaign(
+    id: string,
+    partial: Partial<Pick<Campaign, "name" | "description" | "status">>,
+  ): Campaign | null {
     const campaign = this.getCampaign(id);
     if (!campaign) return null;
     Object.assign(campaign, partial);

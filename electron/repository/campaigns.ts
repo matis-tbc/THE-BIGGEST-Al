@@ -1,4 +1,4 @@
-import { getDb } from '../db';
+import { getDb } from "../db";
 
 export interface CampaignAggregate {
   campaign_id: string | null;
@@ -13,13 +13,22 @@ export interface CampaignAggregate {
   last_activity: string | null;
 }
 
-export function listCampaignAggregates(filter?: { identityEmail?: string; sinceIso?: string }): CampaignAggregate[] {
+export function listCampaignAggregates(filter?: {
+  identityEmail?: string;
+  sinceIso?: string;
+}): CampaignAggregate[] {
   const db = getDb();
   const where: string[] = [];
   const params: any = {};
-  if (filter?.identityEmail) { where.push('r.identity_email = @identityEmail'); params.identityEmail = filter.identityEmail.toLowerCase(); }
-  if (filter?.sinceIso) { where.push('(r.submitted_at IS NULL OR r.submitted_at >= @sinceIso)'); params.sinceIso = filter.sinceIso; }
-  const clause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  if (filter?.identityEmail) {
+    where.push("r.identity_email = @identityEmail");
+    params.identityEmail = filter.identityEmail.toLowerCase();
+  }
+  if (filter?.sinceIso) {
+    where.push("(r.submitted_at IS NULL OR r.submitted_at >= @sinceIso)");
+    params.sinceIso = filter.sinceIso;
+  }
+  const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const sql = `
     SELECT
@@ -44,7 +53,7 @@ export function listCampaignAggregates(filter?: { identityEmail?: string; sinceI
 }
 
 export interface ActivityEvent {
-  type: 'send' | 'reply';
+  type: "send" | "reply";
   at: string;
   identity_email: string;
   to_email?: string;
@@ -56,28 +65,35 @@ export interface ActivityEvent {
   id: string;
 }
 
-export function recentActivity(filter?: { identityEmail?: string; limit?: number }): ActivityEvent[] {
+export function recentActivity(filter?: {
+  identityEmail?: string;
+  limit?: number;
+}): ActivityEvent[] {
   const db = getDb();
   const limit = filter?.limit ?? 50;
   const params: any = { limit };
-  const idFilter = filter?.identityEmail ? 'AND identity_email = @identityEmail' : '';
+  const idFilter = filter?.identityEmail ? "AND identity_email = @identityEmail" : "";
   if (filter?.identityEmail) params.identityEmail = filter.identityEmail.toLowerCase();
 
-  const sends = db.prepare(`
+  const sends = db
+    .prepare(`
     SELECT 'send' AS type, id, submitted_at AS at, identity_email, to_email, subject, status, campaign_name
     FROM recipients
     WHERE submitted_at IS NOT NULL ${idFilter}
     ORDER BY submitted_at DESC
     LIMIT @limit
-  `).all(params) as any[];
+  `)
+    .all(params) as any[];
 
-  const replies = db.prepare(`
+  const replies = db
+    .prepare(`
     SELECT 'reply' AS type, id, received_at AS at, identity_email, from_address, subject, classification
     FROM replies
     WHERE 1 = 1 ${idFilter}
     ORDER BY received_at DESC
     LIMIT @limit
-  `).all(params) as any[];
+  `)
+    .all(params) as any[];
 
   const combined = [...sends, ...replies]
     .filter((e) => !!e.at)
@@ -86,27 +102,38 @@ export function recentActivity(filter?: { identityEmail?: string; limit?: number
   return combined as ActivityEvent[];
 }
 
-export interface TimelinePoint { bucket: string; sends: number; replies: number; }
+export interface TimelinePoint {
+  bucket: string;
+  sends: number;
+  replies: number;
+}
 
-export function sendsRepliesTimeline(filter?: { identityEmail?: string; days?: number }): TimelinePoint[] {
+export function sendsRepliesTimeline(filter?: {
+  identityEmail?: string;
+  days?: number;
+}): TimelinePoint[] {
   const db = getDb();
   const days = filter?.days ?? 30;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const idFilter = filter?.identityEmail ? 'AND identity_email = @identityEmail' : '';
+  const idFilter = filter?.identityEmail ? "AND identity_email = @identityEmail" : "";
   const params: any = { since };
   if (filter?.identityEmail) params.identityEmail = filter.identityEmail.toLowerCase();
 
-  const sends = db.prepare(`
+  const sends = db
+    .prepare(`
     SELECT DATE(submitted_at) AS bucket, COUNT(*) AS n FROM recipients
     WHERE submitted_at IS NOT NULL AND submitted_at >= @since ${idFilter}
     GROUP BY DATE(submitted_at)
-  `).all(params) as { bucket: string; n: number }[];
+  `)
+    .all(params) as { bucket: string; n: number }[];
 
-  const replies = db.prepare(`
+  const replies = db
+    .prepare(`
     SELECT DATE(received_at) AS bucket, COUNT(*) AS n FROM replies
     WHERE received_at >= @since ${idFilter}
     GROUP BY DATE(received_at)
-  `).all(params) as { bucket: string; n: number }[];
+  `)
+    .all(params) as { bucket: string; n: number }[];
 
   const map = new Map<string, TimelinePoint>();
   for (let i = 0; i < days; i++) {
@@ -115,7 +142,13 @@ export function sendsRepliesTimeline(filter?: { identityEmail?: string; days?: n
     const key = d.toISOString().slice(0, 10);
     map.set(key, { bucket: key, sends: 0, replies: 0 });
   }
-  for (const s of sends) { const p = map.get(s.bucket); if (p) p.sends = s.n; }
-  for (const r of replies) { const p = map.get(r.bucket); if (p) p.replies = r.n; }
+  for (const s of sends) {
+    const p = map.get(s.bucket);
+    if (p) p.sends = s.n;
+  }
+  for (const r of replies) {
+    const p = map.get(r.bucket);
+    if (p) p.replies = r.n;
+  }
   return Array.from(map.values()).sort((a, b) => a.bucket.localeCompare(b.bucket));
 }

@@ -25,39 +25,41 @@ export class CompanyGeneratorService {
   private apiKey: string;
 
   constructor() {
-    this.apiKey = process.env.ANTHROPIC_API_KEY || '';
+    this.apiKey = process.env.ANTHROPIC_API_KEY || "";
     if (!this.apiKey) {
-      console.warn('ANTHROPIC_API_KEY is not set in the environment variables.');
+      console.warn("ANTHROPIC_API_KEY is not set in the environment variables.");
     }
   }
 
   async search(query: string, filters?: SearchFilters): Promise<CompanySearchResponse> {
     if (!this.apiKey) {
-      throw new Error('Anthropic API key is missing. Please add ANTHROPIC_API_KEY to your .env file.');
+      throw new Error(
+        "Anthropic API key is missing. Please add ANTHROPIC_API_KEY to your .env file.",
+      );
     }
 
-    let filterText = '';
+    let filterText = "";
     if (filters) {
       const parts: string[] = [];
       if (filters.industry) parts.push(`Industry: ${filters.industry}`);
       if (filters.size) parts.push(`Company size: ${filters.size}`);
       if (filters.location) parts.push(`Location: ${filters.location}`);
       if (parts.length > 0) {
-        filterText = `\n\nAdditional filters:\n${parts.join('\n')}`;
+        filterText = `\n\nAdditional filters:\n${parts.join("\n")}`;
       }
     }
 
-    let excludeText = '';
+    let excludeText = "";
     if (filters?.excludeNames && filters.excludeNames.length > 0) {
-      excludeText = `\n\nDo NOT include these companies (already found): ${filters.excludeNames.join(', ')}`;
+      excludeText = `\n\nDo NOT include these companies (already found): ${filters.excludeNames.join(", ")}`;
     }
 
-    let campaignContext = '';
+    let campaignContext = "";
     if (filters?.campaignDescription) {
       campaignContext = `\n\nCampaign context: ${filters.campaignDescription}`;
     }
 
-    let refinementText = '';
+    let refinementText = "";
     if (filters?.refinement) {
       refinementText = `\n\nUser refinement instruction: ${filters.refinement}`;
     }
@@ -82,34 +84,34 @@ For each company, provide:
 Respond ONLY with a JSON object in this exact format, no other text:
 {"companies": [{"name": "Company Name", "website": "https://example.com", "reasoning": "Brief explanation", "estimatedSize": "100-500 employees", "industry": "Manufacturing", "suggestedContactTitles": ["VP Marketing", "Sponsorship Manager"], "relevanceScore": 4}]}`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
+        "Content-Type": "application/json",
+        "x-api-key": this.apiKey,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 4096,
-        messages: [
-          { role: 'user', content: prompt },
-        ],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({})) as any;
-      throw new Error(`Anthropic API Error: ${response.status} - ${errorData?.error?.message || response.statusText}`);
+      const errorData = (await response.json().catch(() => ({}))) as any;
+      throw new Error(
+        `Anthropic API Error: ${response.status} - ${errorData?.error?.message || response.statusText}`,
+      );
     }
 
-    const data = await response.json() as any;
-    const text = data.content?.[0]?.text || '';
+    const data = (await response.json()) as any;
+    const text = data.content?.[0]?.text || "";
 
     try {
       const parsed = JSON.parse(text) as CompanySearchResponse;
       if (!parsed.companies || !Array.isArray(parsed.companies)) {
-        throw new Error('Invalid response format');
+        throw new Error("Invalid response format");
       }
       return parsed;
     } catch {
@@ -121,7 +123,7 @@ Respond ONLY with a JSON object in this exact format, no other text:
           return parsed;
         }
       }
-      throw new Error('Failed to parse company search results from AI response.');
+      throw new Error("Failed to parse company search results from AI response.");
     }
   }
 }

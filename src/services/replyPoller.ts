@@ -3,7 +3,7 @@ import {
   recordReplies,
   getDeltaLink,
   setDeltaLink,
-  TrackedReply,
+  type TrackedReply,
   getTrackedRecipientByConversation,
   migrateFromLocalStorageOnce,
 } from "./replyTracker";
@@ -34,10 +34,16 @@ class ReplyPoller {
     return () => this.healthListeners.delete(l);
   }
 
-  getHealth(): PollerHealth { return this.health; }
+  getHealth(): PollerHealth {
+    return this.health;
+  }
 
   private emitHealth(): void {
-    for (const l of this.healthListeners) { try { l(this.health); } catch {} }
+    for (const l of this.healthListeners) {
+      try {
+        l(this.health);
+      } catch {}
+    }
   }
 
   async backfill(): Promise<void> {
@@ -46,8 +52,8 @@ class ReplyPoller {
     const profile = await a.getUserProfile();
     const id = profile?.email?.toLowerCase();
     if (!id) return;
-    await a.dbClearDeltaToken(id, 'Inbox');
-    await a.dbClearDeltaToken(id, 'SentItems');
+    await a.dbClearDeltaToken(id, "Inbox");
+    await a.dbClearDeltaToken(id, "SentItems");
     await this.poll();
   }
 
@@ -75,7 +81,7 @@ class ReplyPoller {
       const replies = await getReplies(this.currentIdentity ?? undefined);
       listener(replies);
     } catch (e) {
-      console.warn('emitCurrent failed:', e);
+      console.warn("emitCurrent failed:", e);
     }
   }
 
@@ -95,7 +101,7 @@ class ReplyPoller {
         this.currentIdentity = identityEmail;
       }
 
-      this.pollSentItems(identityEmail).catch((e) => console.warn('SentItems poll failed:', e));
+      this.pollSentItems(identityEmail).catch((e) => console.warn("SentItems poll failed:", e));
 
       const deltaLink = await getDeltaLink(identityEmail);
       const result = await window.electronAPI.pollInboxDelta({ deltaLink, identityEmail });
@@ -104,7 +110,10 @@ class ReplyPoller {
         if (result.expired) {
           await setDeltaLink(identityEmail, undefined);
         }
-        this.health = { lastPollAt: this.health.lastPollAt, lastError: result.error || 'inbox delta failed' };
+        this.health = {
+          lastPollAt: this.health.lastPollAt,
+          lastError: result.error || "inbox delta failed",
+        };
         this.emitHealth();
         return;
       }
@@ -172,13 +181,13 @@ class ReplyPoller {
   private async pollSentItems(identityEmail: string): Promise<void> {
     const a = window.electronAPI;
     if (!a) return;
-    const token = await a.dbGetDeltaToken(identityEmail, 'SentItems');
+    const token = await a.dbGetDeltaToken(identityEmail, "SentItems");
     const result = await a.pollSentItemsDelta({ deltaLink: token ?? undefined });
     if (!result.ok) {
-      if (result.expired) await a.dbClearDeltaToken(identityEmail, 'SentItems');
+      if (result.expired) await a.dbClearDeltaToken(identityEmail, "SentItems");
       return;
     }
-    if (result.deltaLink) await a.dbSetDeltaToken(identityEmail, 'SentItems', result.deltaLink);
+    if (result.deltaLink) await a.dbSetDeltaToken(identityEmail, "SentItems", result.deltaLink);
     if (result.messages.length === 0) return;
     for (const m of result.messages) {
       const sentAt = m.sentDateTime || m.receivedDateTime;

@@ -11,9 +11,7 @@ describe("isHeaderRow", () => {
   });
 
   it("returns false when a cell contains @", () => {
-    expect(
-      isHeaderRow(["John Smith", "john@example.com", "Acme Corp"]),
-    ).toBe(false);
+    expect(isHeaderRow(["John Smith", "john@example.com", "Acme Corp"])).toBe(false);
   });
 
   it("returns false for typical data row", () => {

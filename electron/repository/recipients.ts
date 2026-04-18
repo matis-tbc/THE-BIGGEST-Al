@@ -1,4 +1,4 @@
-import { getDb } from '../db';
+import { getDb } from "../db";
 
 export interface RecipientRow {
   id: string;
@@ -40,7 +40,8 @@ export interface UpsertRecipientInput {
 }
 
 export function upsertRecipient(r: UpsertRecipientInput): void {
-  getDb().prepare(`
+  getDb()
+    .prepare(`
     INSERT INTO recipients (
       id, run_id, campaign_id, campaign_name, identity_email, to_email, to_name,
       subject, graph_message_id, internet_message_id, conversation_id,
@@ -65,45 +66,68 @@ export function upsertRecipient(r: UpsertRecipientInput): void {
       submitted_at = COALESCE(excluded.submitted_at, recipients.submitted_at),
       status = excluded.status,
       failure_reason = COALESCE(excluded.failure_reason, recipients.failure_reason)
-  `).run({
-    id: r.id,
-    runId: r.runId,
-    campaignId: r.campaignId ?? null,
-    campaignName: r.campaignName ?? null,
-    identityEmail: r.identityEmail,
-    toEmail: r.toEmail,
-    toName: r.toName ?? null,
-    subject: r.subject ?? null,
-    graphMessageId: r.graphMessageId ?? null,
-    internetMessageId: r.internetMessageId ?? null,
-    conversationId: r.conversationId ?? null,
-    mode: r.mode ?? null,
-    scheduledFor: r.scheduledFor ?? null,
-    submittedAt: r.submittedAt ?? null,
-    status: r.status,
-    failureReason: r.failureReason ?? null,
-  });
+  `)
+    .run({
+      id: r.id,
+      runId: r.runId,
+      campaignId: r.campaignId ?? null,
+      campaignName: r.campaignName ?? null,
+      identityEmail: r.identityEmail,
+      toEmail: r.toEmail,
+      toName: r.toName ?? null,
+      subject: r.subject ?? null,
+      graphMessageId: r.graphMessageId ?? null,
+      internetMessageId: r.internetMessageId ?? null,
+      conversationId: r.conversationId ?? null,
+      mode: r.mode ?? null,
+      scheduledFor: r.scheduledFor ?? null,
+      submittedAt: r.submittedAt ?? null,
+      status: r.status,
+      failureReason: r.failureReason ?? null,
+    });
 }
 
-export function listRecipients(filter?: { identityEmail?: string; runId?: string; campaignId?: string }): RecipientRow[] {
+export function listRecipients(filter?: {
+  identityEmail?: string;
+  runId?: string;
+  campaignId?: string;
+}): RecipientRow[] {
   const where: string[] = [];
   const params: any = {};
-  if (filter?.identityEmail) { where.push('identity_email = @identityEmail'); params.identityEmail = filter.identityEmail.toLowerCase(); }
-  if (filter?.runId) { where.push('run_id = @runId'); params.runId = filter.runId; }
-  if (filter?.campaignId) { where.push('campaign_id = @campaignId'); params.campaignId = filter.campaignId; }
-  const sql = `SELECT * FROM recipients ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY submitted_at DESC`;
+  if (filter?.identityEmail) {
+    where.push("identity_email = @identityEmail");
+    params.identityEmail = filter.identityEmail.toLowerCase();
+  }
+  if (filter?.runId) {
+    where.push("run_id = @runId");
+    params.runId = filter.runId;
+  }
+  if (filter?.campaignId) {
+    where.push("campaign_id = @campaignId");
+    params.campaignId = filter.campaignId;
+  }
+  const sql = `SELECT * FROM recipients ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY submitted_at DESC`;
   return getDb().prepare(sql).all(params) as RecipientRow[];
 }
 
 export function findByConversationId(conversationId: string): RecipientRow | undefined {
-  return getDb().prepare('SELECT * FROM recipients WHERE conversation_id = ? LIMIT 1').get(conversationId) as RecipientRow | undefined;
+  return getDb()
+    .prepare("SELECT * FROM recipients WHERE conversation_id = ? LIMIT 1")
+    .get(conversationId) as RecipientRow | undefined;
 }
 
-export function getRecipientTimeline(id: string): { recipient: RecipientRow | null; replies: any[] } {
-  const recipient = getDb().prepare('SELECT * FROM recipients WHERE id = ?').get(id) as RecipientRow | undefined;
+export function getRecipientTimeline(id: string): {
+  recipient: RecipientRow | null;
+  replies: any[];
+} {
+  const recipient = getDb().prepare("SELECT * FROM recipients WHERE id = ?").get(id) as
+    | RecipientRow
+    | undefined;
   if (!recipient) return { recipient: null, replies: [] };
   const replies = recipient.conversation_id
-    ? getDb().prepare('SELECT * FROM replies WHERE conversation_id = ? ORDER BY received_at ASC').all(recipient.conversation_id)
+    ? getDb()
+        .prepare("SELECT * FROM replies WHERE conversation_id = ? ORDER BY received_at ASC")
+        .all(recipient.conversation_id)
     : [];
   return { recipient, replies };
 }

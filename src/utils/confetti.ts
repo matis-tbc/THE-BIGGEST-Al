@@ -1,8 +1,8 @@
-import confetti from 'canvas-confetti';
+import confetti from "canvas-confetti";
 
 export function fireCampaignConfetti() {
   const defaults = {
-    colors: ['#eab308', '#f59e0b', '#fbbf24', '#ffffff', '#a855f7'],
+    colors: ["#eab308", "#f59e0b", "#fbbf24", "#ffffff", "#a855f7"],
     spread: 70,
     ticks: 200,
     zIndex: 100,

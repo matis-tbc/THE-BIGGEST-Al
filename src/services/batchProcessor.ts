@@ -1,4 +1,9 @@
-import { mergeTemplate, parseTemplateSections, formatEmailBodyHtml, getSubjectForContactIndex } from "../utils/templateMerge";
+import {
+  mergeTemplate,
+  parseTemplateSections,
+  formatEmailBodyHtml,
+  getSubjectForContactIndex,
+} from "../utils/templateMerge";
 
 export interface Contact {
   id: string;
@@ -132,7 +137,9 @@ export class BatchProcessor {
     }
 
     const recipientToContactId = new Map<string, string>();
-    recipients.forEach((r, i) => recipientToContactId.set(r.recipientId, contacts[i].id));
+    recipients.forEach((r, i) => {
+      recipientToContactId.set(r.recipientId, contacts[i].id);
+    });
 
     const unsubscribe = window.electronAPI.onDispatchProgress(runId, (event) => {
       const contactId = recipientToContactId.get(event.result.recipientId);

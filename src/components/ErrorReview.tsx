@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { fireCampaignConfetti } from '../utils/confetti';
+import type React from "react";
+import { useState, useEffect } from "react";
+import { fireCampaignConfetti } from "../utils/confetti";
 
 interface ErrorReviewProps {
   operationId: string;
@@ -12,45 +13,52 @@ interface ProcessingResult {
   contactId: string;
   name: string;
   email: string;
-  status: 'completed' | 'failed';
+  status: "completed" | "failed";
   messageId?: string;
   error?: string;
 }
 
-export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, onStartOver, onReviewFailedContacts }) => {
+export const ErrorReview: React.FC<ErrorReviewProps> = ({
+  operationId,
+  results,
+  onStartOver,
+  onReviewFailedContacts,
+}) => {
   const [retryCount, setRetryCount] = useState(0);
 
-  const completedResults = results.filter(r => r.status === 'completed');
-  const failedResults = results.filter(r => r.status === 'failed');
+  const completedResults = results.filter((r) => r.status === "completed");
+  const failedResults = results.filter((r) => r.status === "failed");
 
   // Fire confetti when campaign has successful results
   useEffect(() => {
     if (completedResults.length > 0) {
       fireCampaignConfetti();
     }
-  }, []);
+  }, [completedResults.length]);
 
   const handleRetryFailed = async () => {
-    setRetryCount(prev => prev + 1);
-    console.log('Retrying failed contacts...');
+    setRetryCount((prev) => prev + 1);
+    console.log("Retrying failed contacts...");
   };
 
   const handleExportResults = () => {
     const csvContent = [
-      ['Name', 'Email', 'Status', 'Message ID', 'Error'],
-      ...results.map(result => [
+      ["Name", "Email", "Status", "Message ID", "Error"],
+      ...results.map((result) => [
         result.name,
         result.email,
         result.status,
-        result.messageId || '',
-        result.error || ''
-      ])
-    ].map(row => row.join(',')).join('\n');
+        result.messageId || "",
+        result.error || "",
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
 
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = `email-drafter-results-${operationId}.csv`;
     link.click();
@@ -95,8 +103,16 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
                 <div key={result.contactId} className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      <svg
+                        className="h-5 w-5 text-green-500"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     </div>
                     <div className="ml-3">
@@ -104,9 +120,7 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
                       <p className="text-sm text-gray-400">{result.email}</p>
                     </div>
                   </div>
-                  <div className="text-sm text-gray-400">
-                    Draft created
-                  </div>
+                  <div className="text-sm text-gray-400">Draft created</div>
                 </div>
               ))}
             </div>
@@ -129,7 +143,11 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
                       <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        <path
+                          fillRule="evenodd"
+                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     </div>
                     <div className="ml-3">
@@ -137,9 +155,7 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
                       <p className="text-sm text-gray-400">{result.email}</p>
                     </div>
                   </div>
-                  <div className="text-sm text-red-400">
-                    {result.error}
-                  </div>
+                  <div className="text-sm text-red-400">{result.error}</div>
                 </div>
               ))}
             </div>
@@ -151,32 +167,20 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
       <div className="flex justify-between">
         <div className="flex space-x-3">
           {failedResults.length > 0 && onReviewFailedContacts && (
-            <button
-              onClick={onReviewFailedContacts}
-              className="btn-secondary"
-            >
+            <button onClick={onReviewFailedContacts} className="btn-secondary">
               Jump to Contact Fixes
             </button>
           )}
           {failedResults.length > 0 && (
-            <button
-              onClick={handleRetryFailed}
-              className="btn-secondary"
-            >
+            <button onClick={handleRetryFailed} className="btn-secondary">
               Retry Failed ({retryCount > 0 && `Attempt ${retryCount + 1}`})
             </button>
           )}
-          <button
-            onClick={handleExportResults}
-            className="btn-secondary"
-          >
+          <button onClick={handleExportResults} className="btn-secondary">
             Export Results
           </button>
         </div>
-        <button
-          onClick={onStartOver}
-          className="btn-primary"
-        >
+        <button onClick={onStartOver} className="btn-primary">
           Start New Operation
         </button>
       </div>
@@ -186,7 +190,11 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
         <div className="flex">
           <div className="flex-shrink-0">
             <svg className="h-5 w-5 text-blue-300" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                clipRule="evenodd"
+              />
             </svg>
           </div>
           <div className="ml-3">
@@ -194,10 +202,17 @@ export const ErrorReview: React.FC<ErrorReviewProps> = ({ operationId, results, 
             <div className="mt-2 text-sm text-blue-300">
               <p>
                 {completedResults.length > 0 && (
-                  <>{completedResults.length} draft emails have been created in your Outlook. Check your Drafts folder to review and send them.</>
+                  <>
+                    {completedResults.length} draft emails have been created in your Outlook. Check
+                    your Drafts folder to review and send them.
+                  </>
                 )}
                 {failedResults.length > 0 && (
-                  <> {failedResults.length} contacts failed. You can retry them or export the results for manual follow-up.</>
+                  <>
+                    {" "}
+                    {failedResults.length} contacts failed. You can retry them or export the results
+                    for manual follow-up.
+                  </>
                 )}
               </p>
             </div>

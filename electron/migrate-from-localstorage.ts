@@ -1,9 +1,9 @@
-import { getMeta, setMeta } from './db';
-import { upsertRecipient } from './repository/recipients';
-import { insertReplyIfNew } from './repository/replies';
-import { setDeltaToken } from './repository/deltaTokens';
+import { getMeta, setMeta } from "./db";
+import { upsertRecipient } from "./repository/recipients";
+import { insertReplyIfNew } from "./repository/replies";
+import { setDeltaToken } from "./repository/deltaTokens";
 
-const MIGRATED_KEY = 'migrated_from_localstorage_v1';
+const MIGRATED_KEY = "migrated_from_localstorage_v1";
 
 interface LegacyTrackedRecipient {
   conversationId: string;
@@ -37,17 +37,19 @@ export interface LegacyDump {
 }
 
 export function isMigrated(): boolean {
-  return getMeta(MIGRATED_KEY) === 'true';
+  return getMeta(MIGRATED_KEY) === "true";
 }
 
-export function runMigration(dump: LegacyDump): { imported: { recipients: number; replies: number; deltaTokens: number } } {
+export function runMigration(dump: LegacyDump): {
+  imported: { recipients: number; replies: number; deltaTokens: number };
+} {
   let r = 0;
   for (const t of dump.tracked) {
     if (!t.conversationId || !t.recipientEmail) continue;
-    const identity = (t.identityEmail || 'unknown@unknown').toLowerCase();
+    const identity = (t.identityEmail || "unknown@unknown").toLowerCase();
     upsertRecipient({
       id: t.messageId || `${t.runId}:${t.conversationId}`,
-      runId: t.runId || 'legacy',
+      runId: t.runId || "legacy",
       campaignId: t.campaignId ?? null,
       campaignName: t.campaignName ?? null,
       identityEmail: identity,
@@ -56,13 +58,13 @@ export function runMigration(dump: LegacyDump): { imported: { recipients: number
       graphMessageId: t.messageId ?? null,
       conversationId: t.conversationId,
       submittedAt: t.sentAt ?? null,
-      status: 'submitted',
+      status: "submitted",
     });
     r++;
   }
   let rep = 0;
   for (const reply of dump.replies) {
-    const identity = (reply.identityEmail || 'unknown@unknown').toLowerCase();
+    const identity = (reply.identityEmail || "unknown@unknown").toLowerCase();
     const inserted = insertReplyIfNew({
       id: reply.id,
       conversationId: reply.conversationId,
@@ -78,9 +80,9 @@ export function runMigration(dump: LegacyDump): { imported: { recipients: number
   let dt = 0;
   for (const [identity, link] of Object.entries(dump.deltaLinks || {})) {
     if (!link) continue;
-    setDeltaToken(identity, 'Inbox', link);
+    setDeltaToken(identity, "Inbox", link);
     dt++;
   }
-  setMeta(MIGRATED_KEY, 'true');
+  setMeta(MIGRATED_KEY, "true");
   return { imported: { recipients: r, replies: rep, deltaTokens: dt } };
 }

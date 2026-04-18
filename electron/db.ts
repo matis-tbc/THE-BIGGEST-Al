@@ -1,5 +1,5 @@
-import path from 'path';
-import Database from 'better-sqlite3';
+import path from "node:path";
+import Database from "better-sqlite3";
 
 let dbInstance: Database.Database | null = null;
 
@@ -76,28 +76,32 @@ CREATE TABLE IF NOT EXISTS meta (
 
 export function initDb(userDataDir: string): Database.Database {
   if (dbInstance) return dbInstance;
-  const dbPath = path.join(userDataDir, 'emaildrafter.db');
+  const dbPath = path.join(userDataDir, "emaildrafter.db");
   const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
   dbInstance = db;
   return db;
 }
 
 export function getDb(): Database.Database {
-  if (!dbInstance) throw new Error('DB not initialized - call initDb(userDataDir) first');
+  if (!dbInstance) throw new Error("DB not initialized - call initDb(userDataDir) first");
   return dbInstance;
 }
 
 export function getMeta(key: string): string | null {
-  const row = getDb().prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined;
+  const row = getDb().prepare("SELECT value FROM meta WHERE key = ?").get(key) as
+    | { value: string }
+    | undefined;
   return row?.value ?? null;
 }
 
 export function setMeta(key: string, value: string): void {
-  getDb().prepare(`
+  getDb()
+    .prepare(`
     INSERT INTO meta (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
-  `).run(key, value);
+  `)
+    .run(key, value);
 }
