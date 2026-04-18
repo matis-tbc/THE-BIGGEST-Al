@@ -339,10 +339,10 @@ ipcMain.handle(
       }
 
       const result = await dispatchRecipient(authService, recipient, dispatchOptions);
-      results.push(result);
       if (result.ok) submitted++;
       else failed++;
 
+      let dbError: string | undefined;
       try {
         const status =
           payload.mode === "draft"
@@ -370,9 +370,14 @@ ipcMain.handle(
           status,
           failureReason: result.error ?? null,
         });
-      } catch (err) {
+      } catch (err: any) {
+        dbError = err?.message || String(err);
         console.warn("upsertRecipient failed:", err);
       }
+
+      // Surface DB-tracking failures to the caller so the UI can warn the user the
+      // send happened but won't appear in the tracked recipients list.
+      results.push(dbError ? { ...result, dbError } : result);
 
       await appendRunLog(userDataDir, payload.runId, {
         phase: "recipient",
@@ -432,6 +437,8 @@ ipcMain.handle(
 
       const messages: any[] = [];
       let nextDeltaLink: string | undefined;
+      let pendingNextLink: string | undefined;
+      let moreAvailable = false;
       let pageCount = 0;
       const MAX_PAGES = 20;
 
@@ -474,13 +481,23 @@ ipcMain.handle(
           }
         }
         if (data["@odata.nextLink"]) {
+          pendingNextLink = data["@odata.nextLink"];
           url = data["@odata.nextLink"];
         } else if (data["@odata.deltaLink"]) {
           nextDeltaLink = data["@odata.deltaLink"];
+          pendingNextLink = undefined;
           break;
         } else {
+          pendingNextLink = undefined;
           break;
         }
+      }
+
+      // Page cap hit before Graph gave us a deltaLink. Hand the intermediate nextLink
+      // back so the renderer can resume immediately without losing state.
+      if (pageCount >= MAX_PAGES && pendingNextLink && !nextDeltaLink) {
+        nextDeltaLink = pendingNextLink;
+        moreAvailable = true;
       }
 
       const identity = (payload.identityEmail || "").toLowerCase();
@@ -518,7 +535,13 @@ ipcMain.handle(
         }
       }
 
-      return { ok: true, messages, deltaLink: nextDeltaLink, bounces: bounceHits };
+      return {
+        ok: true,
+        messages,
+        deltaLink: nextDeltaLink,
+        moreAvailable,
+        bounces: bounceHits,
+      };
     } catch (error: any) {
       return { ok: false, error: error?.message || String(error), messages: [] };
     }
@@ -597,9 +620,7 @@ ipcMain.handle(
         failed++;
       }
 
-      const result = { messageId, ok, error };
-      results.push(result);
-
+      let dbError: string | undefined;
       try {
         const db = require("./db").getDb();
         if (ok) {
@@ -611,9 +632,13 @@ ipcMain.handle(
             `UPDATE recipients SET status = 'failed', failure_reason = ? WHERE graph_message_id = ?`,
           ).run(error ?? null, messageId);
         }
-      } catch (err) {
+      } catch (err: any) {
+        dbError = err?.message || String(err);
         console.warn("update recipient on send-draft failed:", err);
       }
+
+      const result = dbError ? { messageId, ok, error, dbError } : { messageId, ok, error };
+      results.push(result);
 
       await appendRunLog(userDataDir, payload.runId, {
         phase: "send-draft",
@@ -823,6 +848,8 @@ ipcMain.handle("mail:poll-sent-items-delta", async (_: any, payload: { deltaLink
 
     const messages: any[] = [];
     let nextDeltaLink: string | undefined;
+    let pendingNextLink: string | undefined;
+    let moreAvailable = false;
     let pageCount = 0;
     const MAX_PAGES = 20;
 
@@ -857,16 +884,24 @@ ipcMain.handle("mail:poll-sent-items-delta", async (_: any, payload: { deltaLink
         }
       }
       if (data["@odata.nextLink"]) {
+        pendingNextLink = data["@odata.nextLink"];
         url = data["@odata.nextLink"];
       } else if (data["@odata.deltaLink"]) {
         nextDeltaLink = data["@odata.deltaLink"];
+        pendingNextLink = undefined;
         break;
       } else {
+        pendingNextLink = undefined;
         break;
       }
     }
 
-    return { ok: true, messages, deltaLink: nextDeltaLink };
+    if (pageCount >= MAX_PAGES && pendingNextLink && !nextDeltaLink) {
+      nextDeltaLink = pendingNextLink;
+      moreAvailable = true;
+    }
+
+    return { ok: true, messages, deltaLink: nextDeltaLink, moreAvailable };
   } catch (error: any) {
     return { ok: false, error: error?.message || String(error), messages: [] };
   }

@@ -98,7 +98,7 @@ export async function classifyAndPersist(replyId: string): Promise<Classificatio
   const db = getDb();
   const row = db
     .prepare(
-      "SELECT id, from_address, from_name, subject, body_preview, raw_body, classification FROM replies WHERE id = ?",
+      "SELECT id, from_address, from_name, subject, body_preview, raw_body, classification, classification_confidence, classification_summary FROM replies WHERE id = ?",
     )
     .get(replyId) as any;
   if (!row) return null;
@@ -109,20 +109,41 @@ export async function classifyAndPersist(replyId: string): Promise<Classificatio
       summary: row.classification_summary ?? "",
     };
   }
-  const result = await classifyReply({
-    id: row.id,
-    fromAddress: row.from_address,
-    fromName: row.from_name,
-    subject: row.subject,
-    body: row.raw_body || row.body_preview,
-  });
-  if (!result) return null;
-  db.prepare(`
-    UPDATE replies
-    SET classification = ?, classification_confidence = ?, classification_summary = ?, classified_at = ?
-    WHERE id = ?
-  `).run(result.category, result.confidence, result.summary, new Date().toISOString(), replyId);
-  return result;
+
+  // Optimistic claim: set classified_at to mark this row as in-flight. If two poll cycles
+  // race, only one gets info.changes === 1 and proceeds to call the Anthropic API.
+  const claim = db
+    .prepare("UPDATE replies SET classified_at = ? WHERE id = ? AND classified_at IS NULL")
+    .run(new Date().toISOString(), replyId);
+  if (claim.changes !== 1) {
+    // Another worker is already classifying this reply.
+    return null;
+  }
+
+  try {
+    const result = await classifyReply({
+      id: row.id,
+      fromAddress: row.from_address,
+      fromName: row.from_name,
+      subject: row.subject,
+      body: row.raw_body || row.body_preview,
+    });
+    if (!result) {
+      // Classification failed. Release the claim so a future call can retry.
+      db.prepare("UPDATE replies SET classified_at = NULL WHERE id = ?").run(replyId);
+      return null;
+    }
+    db.prepare(`
+      UPDATE replies
+      SET classification = ?, classification_confidence = ?, classification_summary = ?
+      WHERE id = ?
+    `).run(result.category, result.confidence, result.summary, replyId);
+    return result;
+  } catch (err) {
+    // Release the claim on unexpected errors too.
+    db.prepare("UPDATE replies SET classified_at = NULL WHERE id = ?").run(replyId);
+    throw err;
+  }
 }
 
 export async function reclassify(replyId: string): Promise<Classification | null> {

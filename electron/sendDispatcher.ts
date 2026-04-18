@@ -99,24 +99,34 @@ async function attachLargeViaUploadSession(
   );
 
   const uploadUrl: string = sessionRes.uploadUrl;
-  let offset = 0;
-  while (offset < buffer.length) {
-    const end = Math.min(offset + UPLOAD_CHUNK_SIZE, buffer.length);
-    const chunk = buffer.subarray(offset, end);
-    const rangeHeader = `bytes ${offset}-${end - 1}/${buffer.length}`;
-    const res = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Length": String(chunk.length),
-        "Content-Range": rangeHeader,
-      },
-      body: chunk,
-    });
-    if (!res.ok && res.status !== 201 && res.status !== 200 && res.status !== 202) {
-      const err = await res.text();
-      throw new Error(`Chunk upload failed at ${rangeHeader} (${res.status}): ${err}`);
+  try {
+    let offset = 0;
+    while (offset < buffer.length) {
+      const end = Math.min(offset + UPLOAD_CHUNK_SIZE, buffer.length);
+      const chunk = buffer.subarray(offset, end);
+      const rangeHeader = `bytes ${offset}-${end - 1}/${buffer.length}`;
+      const res = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Length": String(chunk.length),
+          "Content-Range": rangeHeader,
+        },
+        body: chunk,
+      });
+      if (!res.ok && res.status !== 201 && res.status !== 200 && res.status !== 202) {
+        const err = await res.text();
+        throw new Error(`Chunk upload failed at ${rangeHeader} (${res.status}): ${err}`);
+      }
+      offset = end;
     }
-    offset = end;
+  } catch (err) {
+    // Best-effort cleanup so a mid-upload failure doesn't orphan the session on Graph.
+    try {
+      await fetch(uploadUrl, { method: "DELETE" });
+    } catch {
+      // ignore cleanup failures
+    }
+    throw err;
   }
 }
 

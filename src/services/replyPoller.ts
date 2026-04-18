@@ -125,6 +125,14 @@ class ReplyPoller {
         await setDeltaLink(identityEmail, result.deltaLink);
       }
 
+      // If the main process hit its page cap, schedule an immediate follow-up tick
+      // to drain the rest of the inbox before waiting for the next interval.
+      if (result.moreAvailable) {
+        setTimeout(() => {
+          this.poll().catch((e) => console.warn("Follow-up inbox poll failed:", e));
+        }, 250);
+      }
+
       if (result.messages.length === 0) return;
 
       const newReplies: TrackedReply[] = [];
@@ -188,6 +196,13 @@ class ReplyPoller {
       return;
     }
     if (result.deltaLink) await a.dbSetDeltaToken(identityEmail, "SentItems", result.deltaLink);
+    if (result.moreAvailable) {
+      setTimeout(() => {
+        this.pollSentItems(identityEmail).catch((e) =>
+          console.warn("Follow-up SentItems poll failed:", e),
+        );
+      }, 250);
+    }
     if (result.messages.length === 0) return;
     for (const m of result.messages) {
       const sentAt = m.sentDateTime || m.receivedDateTime;

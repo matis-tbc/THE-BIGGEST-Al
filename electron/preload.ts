@@ -92,6 +92,7 @@ declare global {
         expired?: boolean;
         error?: string;
         deltaLink?: string;
+        moreAvailable?: boolean;
         messages: Array<{
           id: string;
           conversationId: string;
@@ -111,6 +112,7 @@ declare global {
         expired?: boolean;
         error?: string;
         deltaLink?: string;
+        moreAvailable?: boolean;
         messages: Array<{
           id: string;
           conversationId: string;
