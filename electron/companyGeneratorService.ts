@@ -1,15 +1,13 @@
-interface CompanyResult {
-  name: string;
-  website: string;
-  reasoning: string;
-  estimatedSize?: string;
-  industry?: string;
-  suggestedContactTitles?: string[];
-  relevanceScore?: number;
-}
+import {
+  type CompanyResult,
+  persistCompanies,
+  readSearchCache,
+  writeSearchCache,
+} from "./repository/companies";
 
 interface CompanySearchResponse {
   companies: CompanyResult[];
+  cached?: boolean;
 }
 
 interface SearchFilters {
@@ -36,6 +34,13 @@ export class CompanyGeneratorService {
       throw new Error(
         "Anthropic API key is missing. Please add ANTHROPIC_API_KEY to your .env file.",
       );
+    }
+
+    const excludeNames = filters?.excludeNames ?? [];
+    const cacheInput = { query, filters };
+    const cached = readSearchCache(cacheInput, excludeNames);
+    if (cached) {
+      return { companies: cached, cached: true };
     }
 
     let filterText = "";
@@ -108,19 +113,29 @@ Respond ONLY with a JSON object in this exact format, no other text:
     const data = (await response.json()) as any;
     const text = data.content?.[0]?.text || "";
 
+    const finalize = (parsed: CompanySearchResponse): CompanySearchResponse => {
+      try {
+        writeSearchCache(cacheInput, parsed.companies);
+        persistCompanies(parsed.companies);
+      } catch (err) {
+        console.warn("company cache/persist failed:", err);
+      }
+      return parsed;
+    };
+
     try {
       const parsed = JSON.parse(text) as CompanySearchResponse;
       if (!parsed.companies || !Array.isArray(parsed.companies)) {
         throw new Error("Invalid response format");
       }
-      return parsed;
+      return finalize(parsed);
     } catch {
       // Try to extract JSON from the response text
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]) as CompanySearchResponse;
         if (parsed.companies && Array.isArray(parsed.companies)) {
-          return parsed;
+          return finalize(parsed);
         }
       }
       throw new Error("Failed to parse company search results from AI response.");

@@ -72,6 +72,29 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS company_searches (
+  query_hash    TEXT PRIMARY KEY,
+  query_json    TEXT NOT NULL,
+  response_json TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_company_searches_created ON company_searches(created_at);
+
+CREATE TABLE IF NOT EXISTS companies (
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL,
+  website          TEXT,
+  industry         TEXT,
+  estimated_size   TEXT,
+  reasoning        TEXT,
+  suggested_titles_json TEXT,
+  relevance_score  INTEGER,
+  first_seen_at    TEXT NOT NULL,
+  source           TEXT NOT NULL DEFAULT 'llm'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_name_lower ON companies(LOWER(name));
+CREATE INDEX IF NOT EXISTS idx_companies_first_seen ON companies(first_seen_at);
 `;
 
 export function initDb(userDataDir: string): Database.Database {

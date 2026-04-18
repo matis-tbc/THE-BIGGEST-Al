@@ -741,8 +741,15 @@ ipcMain.handle(
     },
   ) => {
     try {
+      // Cap excludeNames so the prompt doesn't grow unbounded across repeated "find more" clicks.
+      const cappedFilters = filters
+        ? {
+            ...filters,
+            excludeNames: (filters.excludeNames ?? []).slice(-100),
+          }
+        : undefined;
       const generator = new CompanyGeneratorService();
-      return await generator.search(query, filters);
+      return await generator.search(query, cappedFilters);
     } catch (error) {
       console.error("Company search error:", error);
       throw error;
