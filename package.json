@@ -5,14 +5,14 @@
   "main": "electron/dist/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
-    "dev:react": "vite --host --port 5173 --strictPort",
-    "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
+    "dev:react": "vite --host --port 5273 --strictPort",
+    "dev:electron": "wait-on http://localhost:5273 && cross-env NODE_ENV=development electron .",
     "build": "npm run build:react && npm run build:electron",
     "build:react": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",
     "start": "cross-env NODE_ENV=production electron .",
     "dist": "npm run build && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "cross-env CPLUS_INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 electron-builder install-app-deps"
   },
   "keywords": [
     "electron",
@@ -45,6 +45,8 @@
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.9.0",
     "canvas-confetti": "^1.9.4",
     "cmdk": "^1.1.1",
     "dotenv": "^17.3.0",

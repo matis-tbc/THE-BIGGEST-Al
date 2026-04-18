@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { AuthScreen } from "./components/AuthScreen";
+import { replyPoller } from "./services/replyPoller";
+import { RepliesPanel } from "./components/RepliesPanel";
+import { InsightsPanel } from "./components/InsightsPanel";
 import { ContactImport } from "./components/ContactImport";
 import { TemplateManager } from "./components/TemplateManager";
 import { AttachmentPicker } from "./components/AttachmentPicker";
@@ -438,6 +441,15 @@ function App() {
     appState.activeCampaignId,
   ]);
 
+  useEffect(() => {
+    if (!appState.isAuthenticated) {
+      replyPoller.stop();
+      return;
+    }
+    replyPoller.start();
+    return () => replyPoller.stop();
+  }, [appState.isAuthenticated]);
+
   // Splash screen on boot
   if (showSplash) {
     return <SplashScreen onComplete={() => setShowSplash(false)} />;
@@ -529,6 +541,8 @@ function App() {
                 {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl+'}K
               </kbd>
             </button>
+            <InsightsPanel />
+            <RepliesPanel />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
             Campaign Studio

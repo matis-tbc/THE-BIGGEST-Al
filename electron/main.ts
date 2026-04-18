@@ -4,10 +4,22 @@ const { app, BrowserWindow, ipcMain, shell } = electron;
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
-const { AuthService } = require('./auth');
+const { AuthService, parseScopesFromAccessToken, REQUIRED_SCOPES } = require('./auth');
+const { graphFetch, graphJson } = require('./graphHelper');
+const { dispatchRecipient, appendRunLog } = require('./sendDispatcher');
 const { CompanyGeneratorService } = require('./companyGeneratorService');
 const { guessEmail, guessEmailBatch, backtestPatterns, parseLinkedInUrl, detectDomainPattern, inferDomainCandidates } = require('./emailPatterns');
 const { verifyMx } = require('./emailPatternService');
+const { detectBounce } = require('./bounceParser');
+const { initDb } = require('./db');
+const recipientsRepo = require('./repository/recipients');
+const repliesRepo = require('./repository/replies');
+const runsRepo = require('./repository/runs');
+const deltaTokensRepo = require('./repository/deltaTokens');
+const metricsRepo = require('./repository/metrics');
+const campaignsRepo = require('./repository/campaigns');
+const { isMigrated, runMigration } = require('./migrate-from-localstorage');
+const { classifyAndPersist, reclassify } = require('./classifyReply');
 
 const isDev = process.env.NODE_ENV === 'development';
 const OAUTH_PORT = 3000;
@@ -100,7 +112,7 @@ function createWindow(): void {
 
   // Load the app
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('http://localhost:5273');
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
@@ -119,6 +131,11 @@ function createWindow(): void {
 
 // App event handlers
 app.whenReady().then(() => {
+  try {
+    initDb(app.getPath('userData'));
+  } catch (err) {
+    console.error('DB init failed:', err);
+  }
   createWindow();
   createOAuthRedirectServer();
 });
@@ -167,39 +184,16 @@ ipcMain.handle('auth:get-tokens', async () => {
 ipcMain.handle('auth:get-user-profile', async () => {
   try {
     const authService = new AuthService();
-    let tokens = await authService.getStoredTokens();
-    if (!tokens) {
-      return null;
-    }
+    const tokens = await authService.getStoredTokens();
+    if (!tokens) return null;
 
-    const fetchProfile = async (accessToken: string) => {
-      const response = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(`Graph /me failed (${response.status}): ${body}`);
-      }
-
-      const profile = await response.json() as { displayName?: string; mail?: string; userPrincipalName?: string };
-      return {
-        displayName: profile.displayName || '',
-        email: profile.mail || profile.userPrincipalName || '',
-      };
+    const profile = await graphJson(authService, '/me?$select=displayName,mail,userPrincipalName,id');
+    return {
+      displayName: profile.displayName || '',
+      email: profile.mail || profile.userPrincipalName || '',
+      upn: profile.userPrincipalName || profile.mail || '',
+      id: profile.id || '',
     };
-
-    try {
-      return await fetchProfile(tokens.accessToken);
-    } catch (error: any) {
-      if (error instanceof Error && error.message.includes('(401)') && tokens.refreshToken) {
-        tokens = await authService.refreshAccessToken(tokens.refreshToken);
-        return await fetchProfile(tokens.accessToken);
-      }
-      throw error;
-    }
   } catch (error) {
     console.error('Get user profile error:', error);
     return null;
@@ -214,6 +208,366 @@ ipcMain.handle('auth:refresh-token', async (_: any, refreshToken: string) => {
   } catch (error) {
     console.error('Token refresh error:', error);
     throw error;
+  }
+});
+
+ipcMain.handle('mail:dispatch-run', async (event: any, payload: {
+  runId: string;
+  recipients: Array<any>;
+  attachment?: { name: string; mime: string; base64: string };
+  mode: 'draft' | 'send-now' | 'schedule';
+  staggerSeconds: number;
+  scheduledForIso?: string;
+  campaignId?: string;
+  campaignName?: string;
+  identityEmail?: string;
+}) => {
+  const authService = new AuthService();
+  const tokens = await authService.getStoredTokens();
+  if (!tokens) {
+    return { submitted: 0, failed: payload.recipients.length, results: [], error: 'Not signed in' };
+  }
+
+  const identityEmail = (payload.identityEmail || '').toLowerCase();
+  try {
+    runsRepo.createRun({
+      id: payload.runId,
+      campaignId: payload.campaignId ?? null,
+      campaignName: payload.campaignName ?? null,
+      identityEmail,
+      mode: payload.mode,
+      staggerSeconds: payload.staggerSeconds,
+      scheduledFor: payload.scheduledForIso ?? null,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('createRun failed:', err);
+  }
+
+  const userDataDir = app.getPath('userData');
+  const sharedAttachment = payload.attachment
+    ? { name: payload.attachment.name, mime: payload.attachment.mime, buffer: Buffer.from(payload.attachment.base64, 'base64') }
+    : undefined;
+
+  await appendRunLog(userDataDir, payload.runId, {
+    phase: 'run-start',
+    mode: payload.mode,
+    staggerSeconds: payload.staggerSeconds,
+    scheduledForIso: payload.scheduledForIso,
+    recipientCount: payload.recipients.length,
+    attachmentName: sharedAttachment?.name,
+    attachmentBytes: sharedAttachment?.buffer.length,
+  });
+
+  const useDeferred =
+    payload.mode === 'schedule' ||
+    (payload.mode === 'send-now' && payload.staggerSeconds > 0);
+
+  const baseTimeMs = payload.mode === 'schedule' && payload.scheduledForIso
+    ? new Date(payload.scheduledForIso).getTime()
+    : Date.now() + 60 * 1000;
+
+  const results: any[] = [];
+  let submitted = 0;
+  let failed = 0;
+  const sendChannel = `mail:dispatch-progress:${payload.runId}`;
+
+  for (let i = 0; i < payload.recipients.length; i++) {
+    const recipient = payload.recipients[i];
+
+    let dispatchOptions: any;
+    if (useDeferred) {
+      const deferredMs = baseTimeMs + i * payload.staggerSeconds * 1000;
+      dispatchOptions = {
+        mode: 'send-now',
+        deferredSendIso: new Date(deferredMs).toISOString(),
+        attachment: sharedAttachment,
+      };
+    } else {
+      dispatchOptions = {
+        mode: payload.mode,
+        attachment: sharedAttachment,
+      };
+    }
+
+    const result = await dispatchRecipient(authService, recipient, dispatchOptions);
+    results.push(result);
+    if (result.ok) submitted++;
+    else failed++;
+
+    try {
+      const status = payload.mode === 'draft'
+        ? (result.ok ? 'draft' : 'failed')
+        : (result.ok ? 'submitted' : 'failed');
+      recipientsRepo.upsertRecipient({
+        id: recipient.recipientId,
+        runId: payload.runId,
+        campaignId: payload.campaignId ?? null,
+        campaignName: payload.campaignName ?? null,
+        identityEmail: identityEmail || 'unknown@unknown',
+        toEmail: recipient.toEmail,
+        toName: recipient.toName ?? null,
+        subject: recipient.subject ?? null,
+        graphMessageId: result.messageId ?? null,
+        internetMessageId: result.internetMessageId ?? null,
+        conversationId: result.conversationId ?? null,
+        mode: payload.mode,
+        scheduledFor: dispatchOptions.deferredSendIso ?? payload.scheduledForIso ?? null,
+        submittedAt: result.ok ? new Date().toISOString() : null,
+        status,
+        failureReason: result.error ?? null,
+      });
+    } catch (err) {
+      console.warn('upsertRecipient failed:', err);
+    }
+
+    await appendRunLog(userDataDir, payload.runId, {
+      phase: 'recipient',
+      recipientId: recipient.recipientId,
+      toEmail: recipient.toEmail,
+      ok: result.ok,
+      messageId: result.messageId,
+      conversationId: result.conversationId,
+      error: result.error,
+      deferredSendIso: dispatchOptions.deferredSendIso,
+    });
+
+    try {
+      event.sender.send(sendChannel, {
+        index: i,
+        total: payload.recipients.length,
+        result,
+      });
+    } catch (e) {
+      // sender might be gone if window closed
+    }
+
+    if (!useDeferred && payload.staggerSeconds > 0 && i < payload.recipients.length - 1) {
+      await new Promise(r => setTimeout(r, payload.staggerSeconds * 1000));
+    }
+  }
+
+  await appendRunLog(userDataDir, payload.runId, {
+    phase: 'run-end',
+    submitted,
+    failed,
+  });
+
+  try { runsRepo.finalizeRun(payload.runId, submitted, failed); } catch (err) { console.warn('finalizeRun failed:', err); }
+
+  return { submitted, failed, results };
+});
+
+ipcMain.handle('mail:poll-inbox-delta', async (_: any, payload: { deltaLink?: string; identityEmail?: string }) => {
+  try {
+    const authService = new AuthService();
+    const tokens = await authService.getStoredTokens();
+    if (!tokens) {
+      return { ok: false, error: 'Not signed in', messages: [] };
+    }
+
+    let url = payload.deltaLink
+      || `https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages/delta?$select=id,conversationId,subject,from,receivedDateTime,bodyPreview,internetMessageHeaders,isRead,body,singleValueExtendedProperties&$expand=singleValueExtendedProperties($filter=id eq 'String 0x007D')`;
+
+    const messages: any[] = [];
+    let nextDeltaLink: string | undefined;
+    let pageCount = 0;
+    const MAX_PAGES = 20;
+
+    while (url && pageCount < MAX_PAGES) {
+      pageCount++;
+      const res = await graphFetch(authService, url);
+      if (res.status === 410) {
+        return { ok: false, expired: true, messages: [], error: 'Delta token expired, restart from scratch' };
+      }
+      if (!res.ok) {
+        const body = await res.text();
+        return { ok: false, error: `Inbox delta failed (${res.status}): ${body}`, messages: [] };
+      }
+      const data: any = await res.json();
+      if (Array.isArray(data.value)) {
+        for (const m of data.value) {
+          const transportProp = Array.isArray(m.singleValueExtendedProperties)
+            ? m.singleValueExtendedProperties.find((p: any) => typeof p?.id === 'string' && p.id.toLowerCase().includes('0x007d'))
+            : undefined;
+          messages.push({
+            id: m.id,
+            conversationId: m.conversationId,
+            subject: m.subject,
+            from: m.from?.emailAddress?.address || '',
+            fromName: m.from?.emailAddress?.name || '',
+            receivedDateTime: m.receivedDateTime,
+            bodyPreview: m.bodyPreview,
+            bodyContent: m.body?.content || '',
+            bodyContentType: m.body?.contentType || '',
+            isRead: m.isRead,
+            transportHeaders: transportProp?.value || '',
+          });
+        }
+      }
+      if (data['@odata.nextLink']) {
+        url = data['@odata.nextLink'];
+      } else if (data['@odata.deltaLink']) {
+        nextDeltaLink = data['@odata.deltaLink'];
+        break;
+      } else {
+        break;
+      }
+    }
+
+    const identity = (payload.identityEmail || '').toLowerCase();
+    const bounceHits: Array<{ failedRecipients: string[]; diagnostic?: string }> = [];
+    if (identity) {
+      for (const m of messages) {
+        const det = detectBounce({
+          fromAddress: m.from,
+          subject: m.subject,
+          rawHeaders: m.transportHeaders,
+          body: m.bodyContent || m.bodyPreview,
+        });
+        if (det.isBounce && det.failedRecipients.length > 0) {
+          bounceHits.push({ failedRecipients: det.failedRecipients, diagnostic: det.diagnostic });
+          try {
+            const { getDb } = require('./db');
+            const db = getDb();
+            for (const email of det.failedRecipients) {
+              db.prepare(`
+                UPDATE recipients SET status = 'bounced', failure_reason = COALESCE(?, failure_reason)
+                WHERE LOWER(to_email) = ? AND identity_email = ? AND status != 'bounced'
+                  AND id = (SELECT id FROM recipients WHERE LOWER(to_email) = ? AND identity_email = ? ORDER BY submitted_at DESC LIMIT 1)
+              `).run(det.diagnostic ?? null, email.toLowerCase(), identity, email.toLowerCase(), identity);
+            }
+          } catch (err) {
+            console.warn('mark-bounced (inline) failed:', err);
+          }
+        }
+      }
+    }
+
+    return { ok: true, messages, deltaLink: nextDeltaLink, bounces: bounceHits };
+  } catch (error: any) {
+    return { ok: false, error: error?.message || String(error), messages: [] };
+  }
+});
+
+ipcMain.handle('mail:send-drafts', async (event: any, payload: {
+  runId: string;
+  messageIds: string[];
+  staggerSeconds: number;
+  scheduledForIso?: string;
+}) => {
+  const authService = new AuthService();
+  const tokens = await authService.getStoredTokens();
+  if (!tokens) {
+    return { sent: 0, failed: payload.messageIds.length, results: [], error: 'Not signed in' };
+  }
+
+  const userDataDir = app.getPath('userData');
+  await appendRunLog(userDataDir, payload.runId, {
+    phase: 'send-drafts-start',
+    count: payload.messageIds.length,
+    staggerSeconds: payload.staggerSeconds,
+    scheduledForIso: payload.scheduledForIso,
+  });
+
+  const useDeferred =
+    !!payload.scheduledForIso || payload.staggerSeconds > 0;
+
+  const baseTimeMs = payload.scheduledForIso
+    ? new Date(payload.scheduledForIso).getTime()
+    : Date.now() + 60 * 1000;
+
+  const results: any[] = [];
+  let sent = 0;
+  let failed = 0;
+  const channel = `mail:send-drafts-progress:${payload.runId}`;
+
+  for (let i = 0; i < payload.messageIds.length; i++) {
+    const messageId = payload.messageIds[i];
+    let ok = false;
+    let error: string | undefined;
+
+    try {
+      if (useDeferred) {
+        const deferredMs = baseTimeMs + i * payload.staggerSeconds * 1000;
+        const patchRes = await graphFetch(authService, `/me/messages/${messageId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            singleValueExtendedProperties: [
+              { id: 'SystemTime 0x3FEF', value: new Date(deferredMs).toISOString() },
+            ],
+          }),
+        });
+        if (!patchRes.ok) {
+          throw new Error(`PATCH deferred-property failed (${patchRes.status}): ${await patchRes.text()}`);
+        }
+      }
+
+      const sendRes = await graphFetch(authService, `/me/messages/${messageId}/send`, { method: 'POST' });
+      if (!sendRes.ok) {
+        throw new Error(`Send failed (${sendRes.status}): ${await sendRes.text()}`);
+      }
+      ok = true;
+      sent++;
+    } catch (e: any) {
+      error = e?.message || String(e);
+      failed++;
+    }
+
+    const result = { messageId, ok, error };
+    results.push(result);
+
+    try {
+      const db = require('./db').getDb();
+      if (ok) {
+        db.prepare(`UPDATE recipients SET status = 'submitted', submitted_at = ? WHERE graph_message_id = ?`)
+          .run(new Date().toISOString(), messageId);
+      } else {
+        db.prepare(`UPDATE recipients SET status = 'failed', failure_reason = ? WHERE graph_message_id = ?`)
+          .run(error ?? null, messageId);
+      }
+    } catch (err) {
+      console.warn('update recipient on send-draft failed:', err);
+    }
+
+    await appendRunLog(userDataDir, payload.runId, {
+      phase: 'send-draft',
+      messageId,
+      ok,
+      error,
+    });
+
+    try {
+      event.sender.send(channel, { index: i, total: payload.messageIds.length, result });
+    } catch (_) {}
+
+    if (!useDeferred && payload.staggerSeconds > 0 && i < payload.messageIds.length - 1) {
+      await new Promise(r => setTimeout(r, payload.staggerSeconds * 1000));
+    }
+  }
+
+  await appendRunLog(userDataDir, payload.runId, {
+    phase: 'send-drafts-end',
+    sent,
+    failed,
+  });
+
+  return { sent, failed, results };
+});
+
+ipcMain.handle('auth:check-scopes', async () => {
+  try {
+    const authService = new AuthService();
+    const tokens = await authService.getStoredTokens();
+    if (!tokens) {
+      return { signedIn: false, missing: REQUIRED_SCOPES };
+    }
+    const granted = parseScopesFromAccessToken(tokens.accessToken);
+    const missing = REQUIRED_SCOPES.filter((s: string) => !granted.includes(s));
+    return { signedIn: true, granted, missing };
+  } catch (error: any) {
+    console.error('Scope check error:', error);
+    return { signedIn: false, missing: REQUIRED_SCOPES, error: error?.message || String(error) };
   }
 });
 
@@ -332,6 +686,188 @@ ipcMain.handle('email:resolve-domain', async (_: any, companyName: string) => {
     console.error('Domain resolve error:', error);
     return { domain: null, mxValid: false, candidates: [] };
   }
+});
+
+ipcMain.handle('mail:poll-sent-items-delta', async (_: any, payload: { deltaLink?: string }) => {
+  try {
+    const authService = new AuthService();
+    const tokens = await authService.getStoredTokens();
+    if (!tokens) {
+      return { ok: false, error: 'Not signed in', messages: [] };
+    }
+
+    let url = payload.deltaLink
+      || `https://graph.microsoft.com/v1.0/me/mailFolders/SentItems/messages/delta?$select=id,conversationId,subject,toRecipients,sentDateTime,receivedDateTime,internetMessageId`;
+
+    const messages: any[] = [];
+    let nextDeltaLink: string | undefined;
+    let pageCount = 0;
+    const MAX_PAGES = 20;
+
+    while (url && pageCount < MAX_PAGES) {
+      pageCount++;
+      const res = await graphFetch(authService, url);
+      if (res.status === 410) {
+        return { ok: false, expired: true, messages: [], error: 'SentItems delta token expired' };
+      }
+      if (!res.ok) {
+        const body = await res.text();
+        return { ok: false, error: `SentItems delta failed (${res.status}): ${body}`, messages: [] };
+      }
+      const data: any = await res.json();
+      if (Array.isArray(data.value)) {
+        for (const m of data.value) {
+          messages.push({
+            id: m.id,
+            conversationId: m.conversationId,
+            internetMessageId: m.internetMessageId,
+            subject: m.subject,
+            toEmails: Array.isArray(m.toRecipients) ? m.toRecipients.map((r: any) => r?.emailAddress?.address || '').filter(Boolean) : [],
+            sentDateTime: m.sentDateTime,
+            receivedDateTime: m.receivedDateTime,
+          });
+        }
+      }
+      if (data['@odata.nextLink']) {
+        url = data['@odata.nextLink'];
+      } else if (data['@odata.deltaLink']) {
+        nextDeltaLink = data['@odata.deltaLink'];
+        break;
+      } else {
+        break;
+      }
+    }
+
+    return { ok: true, messages, deltaLink: nextDeltaLink };
+  } catch (error: any) {
+    return { ok: false, error: error?.message || String(error), messages: [] };
+  }
+});
+
+// ---------- DB IPC ----------
+
+ipcMain.handle('db:record-replies', async (_: any, replies: Array<{
+  id: string;
+  conversationId: string;
+  identityEmail: string;
+  fromAddress?: string;
+  fromName?: string;
+  subject?: string;
+  bodyPreview?: string;
+  rawBody?: string;
+  receivedAt: string;
+}>) => {
+  const inserted: any[] = [];
+  for (const r of replies) {
+    const row = repliesRepo.insertReplyIfNew(r);
+    if (row) {
+      inserted.push(row);
+      classifyAndPersist(row.id).catch((err: any) => console.warn('classify failed for', row.id, err?.message || err));
+    }
+  }
+  return { inserted, all: repliesRepo.listReplies({ identityEmail: replies[0]?.identityEmail }) };
+});
+
+ipcMain.handle('replies:reclassify', async (_: any, replyId: string) => {
+  return reclassify(replyId);
+});
+
+ipcMain.handle('db:list-replies', async (_: any, filter?: { identityEmail?: string }) => {
+  return repliesRepo.listReplies(filter);
+});
+
+ipcMain.handle('db:list-recipients', async (_: any, filter?: { identityEmail?: string; runId?: string; campaignId?: string }) => {
+  return recipientsRepo.listRecipients(filter);
+});
+
+ipcMain.handle('db:list-runs', async (_: any, filter?: { identityEmail?: string }) => {
+  return runsRepo.listRuns(filter);
+});
+
+ipcMain.handle('db:metrics', async (_: any, filter?: { identityEmail?: string }) => {
+  return metricsRepo.computeMetrics(filter);
+});
+
+ipcMain.handle('db:list-campaigns', async (_: any, filter?: { identityEmail?: string; sinceIso?: string }) => {
+  return campaignsRepo.listCampaignAggregates(filter);
+});
+
+ipcMain.handle('db:recent-activity', async (_: any, filter?: { identityEmail?: string; limit?: number }) => {
+  return campaignsRepo.recentActivity(filter);
+});
+
+ipcMain.handle('db:timeline', async (_: any, filter?: { identityEmail?: string; days?: number }) => {
+  return campaignsRepo.sendsRepliesTimeline(filter);
+});
+
+ipcMain.handle('db:get-recipient-timeline', async (_: any, id: string) => {
+  return recipientsRepo.getRecipientTimeline(id);
+});
+
+ipcMain.handle('db:mark-reply-seen', async (_: any, id: string) => {
+  repliesRepo.markSeen(id);
+  return true;
+});
+
+ipcMain.handle('db:mark-all-replies-seen', async (_: any, identityEmail?: string) => {
+  repliesRepo.markAllSeen(identityEmail);
+  return true;
+});
+
+ipcMain.handle('db:get-delta-token', async (_: any, identityEmail: string, folder: string) => {
+  return deltaTokensRepo.getDeltaToken(identityEmail, folder);
+});
+
+ipcMain.handle('db:set-delta-token', async (_: any, identityEmail: string, folder: string, deltaLink: string) => {
+  deltaTokensRepo.setDeltaToken(identityEmail, folder, deltaLink);
+  return true;
+});
+
+ipcMain.handle('db:clear-delta-token', async (_: any, identityEmail: string, folder: string) => {
+  deltaTokensRepo.clearDeltaToken(identityEmail, folder);
+  return true;
+});
+
+ipcMain.handle('db:mark-delivered', async (_: any, match: { internetMessageId?: string; conversationId?: string; toEmail?: string; identityEmail: string; sentAt: string }) => {
+  const { getDb } = require('./db');
+  const db = getDb();
+  if (match.internetMessageId) {
+    const info = db.prepare(`
+      UPDATE recipients SET status = 'delivered', delivered_at = @sentAt
+      WHERE internet_message_id = @imi AND identity_email = @identity AND status NOT IN ('delivered', 'bounced')
+    `).run({ sentAt: match.sentAt, imi: match.internetMessageId, identity: match.identityEmail.toLowerCase() });
+    if (info.changes > 0) return { updated: info.changes };
+  }
+  if (match.conversationId && match.toEmail) {
+    const info = db.prepare(`
+      UPDATE recipients SET status = 'delivered', delivered_at = @sentAt
+      WHERE conversation_id = @conv AND LOWER(to_email) = @toEmail AND identity_email = @identity AND status NOT IN ('delivered', 'bounced')
+    `).run({ sentAt: match.sentAt, conv: match.conversationId, toEmail: match.toEmail.toLowerCase(), identity: match.identityEmail.toLowerCase() });
+    return { updated: info.changes };
+  }
+  return { updated: 0 };
+});
+
+ipcMain.handle('db:mark-bounced', async (_: any, match: { failedRecipients: string[]; identityEmail: string; diagnostic?: string }) => {
+  const { getDb } = require('./db');
+  const db = getDb();
+  let totalUpdated = 0;
+  for (const email of match.failedRecipients) {
+    const info = db.prepare(`
+      UPDATE recipients SET status = 'bounced', failure_reason = COALESCE(@diag, failure_reason)
+      WHERE LOWER(to_email) = @toEmail AND identity_email = @identity AND status NOT IN ('bounced')
+      AND id IN (SELECT id FROM recipients WHERE LOWER(to_email) = @toEmail AND identity_email = @identity ORDER BY submitted_at DESC LIMIT 1)
+    `).run({ diag: match.diagnostic ?? null, toEmail: email.toLowerCase(), identity: match.identityEmail.toLowerCase() });
+    totalUpdated += info.changes;
+  }
+  return { updated: totalUpdated };
+});
+
+ipcMain.handle('db:is-migrated', async () => isMigrated());
+
+ipcMain.handle('db:run-migration', async (_: any, dump: any) => {
+  if (isMigrated()) return { alreadyMigrated: true };
+  return runMigration(dump);
 });
 
 function createOAuthRedirectServer(): void {

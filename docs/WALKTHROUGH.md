@@ -162,6 +162,53 @@ Set up in the **Team Manager** (accessible from the home screen):
 
 ---
 
+## 9. Replies Panel
+
+Button in the app header, with a health dot:
+
+- **Green** = polling healthy (<2m since last tick)
+- **Amber** = slow (2-10m)
+- **Rose** = error or stalled
+
+Click the button to open the panel. Each reply row shows:
+- Sender, subject, preview
+- A color-coded **classification badge**: interested, not_interested, auto_reply, out_of_office, bounce, needs_followup, other
+- Click a reply to mark it seen; close the panel to mark all seen
+
+Controls:
+- **Refresh**: force a poll now
+- **Backfill**: clear inbox + SentItems delta tokens and re-scan from scratch (useful if you reinstall or change Graph permissions)
+- **Enable notifications** banner (first launch only): opt in once for desktop notifications on new replies
+
+---
+
+## 10. Insights Panel
+
+Button in the app header next to Replies.
+
+- **Hero metrics**: Sent, Delivered, Replied, Bounced, Failed, each with percentage of total
+- **30-day sparklines** for sends + replies
+- **Funnel**: Sent → Delivered → Replied bar chart
+- **Per-campaign table**: sends, deliveries, replies, bounces, reply rate, last activity
+- **Recent activity feed**: last 50 sends + replies interleaved, chronologically
+- **Export CSV**: dump all recipients for the active identity
+
+Scoped automatically to the signed-in account. Switch accounts in the Send Options panel to see the other identity's data.
+
+---
+
+## 11. Send modes: Draft / Send now / Schedule
+
+In the Send Options panel before each run:
+
+- **Draft** — create drafts, don't send. Review in Outlook, then return to the app and use the "Send N drafts" button with optional stagger/schedule.
+- **Send now** — send immediately. If stagger > 0, each recipient is submitted with a deferred-send property (server-side staggering, so the app can close).
+- **Schedule** — pick a date and time. Messages submit now but Exchange holds them until release. App can close; machine can sleep.
+
+Scheduled/staggered sends write to `userData/runs/<runId>.jsonl` and the SQLite recipient table before returning, so you can audit after the fact.
+
+---
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |

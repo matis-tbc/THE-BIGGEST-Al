@@ -16,7 +16,7 @@ const TENANT_ID: string = envTenantId;
 
 const REDIRECT_URI = process.env.AZURE_REDIRECT_URI || 'http://localhost:3000/redirect';
 const AUTH_BASE_URL = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0`;
-const SCOPES = ['User.Read', 'Mail.ReadWrite', 'offline_access'];
+const SCOPES = ['User.Read', 'Mail.ReadWrite', 'Mail.Send', 'offline_access'];
 const SERVICE_NAME = 'email-drafter';
 const ACCOUNT_NAME = 'microsoft-tokens';
 
@@ -234,3 +234,18 @@ export class AuthService {
     return Date.now() >= (tokens.expiresAt - bufferTime);
   }
 }
+
+export function parseScopesFromAccessToken(accessToken: string): string[] {
+  const parts = accessToken.split('.');
+  if (parts.length !== 3) return [];
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+    if (typeof payload.scp === 'string') return payload.scp.split(/\s+/).filter(Boolean);
+    if (Array.isArray(payload.scp)) return payload.scp;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export const REQUIRED_SCOPES = ['Mail.Send', 'Mail.ReadWrite'];

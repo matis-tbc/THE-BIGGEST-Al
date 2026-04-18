@@ -1,4 +1,10 @@
-# Power Automate Integration
+# Power Automate Integration (HISTORICAL, NO LONGER USED)
+
+> **Status:** Superseded. The app has had direct `Mail.Send` permission since ticket GREQ0513818 (2026-04-16). Sending no longer depends on Power Automate. Inbox scanning is handled by the built-in `/delta` poller + SQLite telemetry; see `ARCHITECTURE.md`.
+>
+> This document is kept for reference in case the direct-send permission ever gets revoked and we need to fall back to the PA workaround.
+
+---
 
 The CU Hyperloop Email Drafter relies on two Power Automate (PA) flows for email sending and inbox logging. This is because CU's school IT only grants Microsoft Graph API permissions for **creating drafts**, not for sending emails directly.
 

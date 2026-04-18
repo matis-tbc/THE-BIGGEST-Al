@@ -1,0 +1,12 @@
+Subject: Send pipeline smoke test
+
+Hi {{name}},
+
+This is a smoke test from the Email Drafter app confirming the new send pipeline works end-to-end.
+
+Company on file: {{company}}.
+
+If you got this, the run pipeline + identity switching + Graph send all worked.
+
+Best,
+CU Hyperloop
