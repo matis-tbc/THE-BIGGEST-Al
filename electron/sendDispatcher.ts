@@ -8,7 +8,11 @@ const UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
 
 export interface RecipientPayload {
   recipientId: string;
+  /** Primary recipient address. Always present. */
   toEmail: string;
+  /** Optional extra addresses when a row's email cell is a list (e.g.
+   * "a@x.com, b@x.com"). All entries plus `toEmail` are sent on the TO line. */
+  additionalToEmails?: string[];
   ccEmails?: string[];
   subject: string;
   bodyHtml: string;
@@ -26,6 +30,12 @@ export interface DispatchOptions {
   scheduledForIso?: string;
   deferredSendIso?: string;
   attachment?: SharedAttachment;
+  /**
+   * Fired between phases so the UI can show draft-created vs attachment-
+   * uploading states. Optional — callers that only care about final
+   * success/failure can ignore it.
+   */
+  onPhase?: (phase: "drafted" | "attaching") => void;
 }
 
 export interface DispatchResult {
@@ -40,10 +50,23 @@ export interface DispatchResult {
 const ME_BASE = "/me";
 
 function buildDraftBody(recipient: RecipientPayload, deferredSendIso?: string): any {
+  // Build the TO list from the primary address plus any additional addresses
+  // on the row. Dedupe case-insensitively so "a@x.com" and "A@X.COM" only
+  // appear once. Empty tokens are dropped defensively.
+  const toAddrs: string[] = [recipient.toEmail, ...(recipient.additionalToEmails || [])]
+    .map((a) => (a || "").trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const dedupedTo = toAddrs.filter((a) => {
+    const k = a.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   const message: any = {
     subject: recipient.subject,
     body: { contentType: "HTML", content: recipient.bodyHtml },
-    toRecipients: [{ emailAddress: { address: recipient.toEmail } }],
+    toRecipients: dedupedTo.map((addr) => ({ emailAddress: { address: addr } })),
   };
   if (recipient.ccEmails && recipient.ccEmails.length > 0) {
     message.ccRecipients = recipient.ccEmails.map((addr) => ({ emailAddress: { address: addr } }));
@@ -152,8 +175,18 @@ export async function dispatchRecipient(
     const conversationId: string | undefined = draft.conversationId;
     const internetMessageId: string | undefined = draft.internetMessageId;
 
+    // Signal to the caller that the draft is created and we're about to
+    // start uploading the attachment (if any). Callers can emit this to
+    // the UI so the "Drafted" / "Uploading" counters progress visibly.
+    try {
+      options.onPhase?.("drafted");
+    } catch {}
+
     const effectiveAttachment = recipient.attachment ?? options.attachment;
     if (effectiveAttachment) {
+      try {
+        options.onPhase?.("attaching");
+      } catch {}
       if (effectiveAttachment.buffer.length <= SMALL_ATTACHMENT_LIMIT) {
         await attachInlineSmall(authService, messageId, effectiveAttachment);
       } else {

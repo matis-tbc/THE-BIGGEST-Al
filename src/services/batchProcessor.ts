@@ -4,6 +4,7 @@ import {
   formatEmailBodyHtml,
   getSubjectForContactIndex,
 } from "../utils/templateMerge";
+import { projectStore } from "./projectStore";
 
 export interface Contact {
   id: string;
@@ -109,9 +110,13 @@ export class BatchProcessor {
       ? baseCc.filter((cc) => cc.toLowerCase() !== activeAccountEmail)
       : baseCc;
 
+    const recipientIdToTemplateId = new Map<string, string>();
     const recipients = contacts.map((contact, index) => {
       const activeId = contact.templateId || defaultTemplateId;
       const activeTemplate = templates.find((t) => t.id === activeId) || templates[0];
+      if (activeTemplate?.id) {
+        recipientIdToTemplateId.set(recipientIds[index], activeTemplate.id);
+      }
       const parsedTemplate = parseTemplateSections(activeTemplate.content);
       const selectedSubjectTemplate = getSubjectForContactIndex(activeTemplate, index);
       const toTemplate = parsedTemplate.to || "";
@@ -119,9 +124,17 @@ export class BatchProcessor {
       const subject = mergeTemplate(selectedSubjectTemplate, contact).trim();
       const rawBody = mergeTemplate(bodyTemplate, contact);
       const bodyHtml = formatEmailBodyHtml(rawBody);
+      // Resolve the TO list. Prefer the template's `To:` header if it renders
+      // non-empty tokens; otherwise fall back to the contact's email cell
+      // (which may itself be a comma-separated list for multi-recipient rows
+      // like `a@x.com, b@x.com`). First token becomes the primary; any
+      // remaining tokens ride along on the TO line.
       const mergedRecipients = mergeTemplate(toTemplate, contact).trim();
-      const toEmails = parseRecipients(mergedRecipients);
-      const toEmail = toEmails[0] || contact.email;
+      const fromTemplate = parseRecipients(mergedRecipients);
+      const fromContact = parseRecipients(contact.email || "");
+      const toList = fromTemplate.length > 0 ? fromTemplate : fromContact;
+      const toEmail = toList[0] || contact.email;
+      const additionalToEmails = toList.slice(1);
       const perRowAttachmentPath =
         attachmentColumnName && typeof contact[attachmentColumnName] === "string"
           ? (contact[attachmentColumnName] as string).trim()
@@ -129,6 +142,7 @@ export class BatchProcessor {
       return {
         recipientId: recipientIds[index],
         toEmail,
+        ...(additionalToEmails.length > 0 ? { additionalToEmails } : {}),
         toName: contact.name,
         ccEmails: effectiveCc,
         subject,
@@ -147,19 +161,45 @@ export class BatchProcessor {
       recipientToContactId.set(r.recipientId, contacts[i].id);
     });
 
+    const recordedTemplateUses = new Set<string>();
     const unsubscribe = window.electronAPI.onDispatchProgress(runId, (event) => {
-      const contactId = recipientToContactId.get(event.result.recipientId);
+      // Intermediate phase events (drafted / attaching) arrive WITHOUT a
+      // final `result` block. Translate them to status updates so the UI
+      // counters visibly advance through Drafted → Uploading → Completed
+      // for per-row attachment campaigns.
+      if (event.phase && event.recipientId && !event.result) {
+        const contactId = recipientToContactId.get(event.recipientId);
+        if (!contactId) return;
+        const idx = results.findIndex((r) => r.contactId === contactId);
+        if (idx < 0) return;
+        results[idx] = {
+          ...results[idx],
+          status: event.phase === "attaching" ? "attaching" : "drafted",
+        };
+        onProgress([...results]);
+        return;
+      }
+      if (!event.result) return; // defensive: only process final events here
+      const finalResult = event.result;
+      const contactId = recipientToContactId.get(finalResult.recipientId);
       if (!contactId) return;
       const idx = results.findIndex((r) => r.contactId === contactId);
       if (idx < 0) return;
-      if (event.result.ok) {
+      if (finalResult.ok) {
         results[idx] = {
           ...results[idx],
           status: sendOptions.mode === "draft" ? "completed" : "completed",
-          messageId: event.result.messageId,
+          messageId: finalResult.messageId,
         };
+        const templateId = recipientIdToTemplateId.get(finalResult.recipientId);
+        if (templateId && !recordedTemplateUses.has(templateId)) {
+          recordedTemplateUses.add(templateId);
+          projectStore.recordTemplateUse(templateId).catch((err) => {
+            console.warn("recordTemplateUse failed", err);
+          });
+        }
       } else {
-        results[idx] = { ...results[idx], status: "failed", error: event.result.error };
+        results[idx] = { ...results[idx], status: "failed", error: finalResult.error };
       }
       onProgress([...results]);
     });

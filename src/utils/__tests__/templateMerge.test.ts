@@ -6,6 +6,9 @@ import {
   getSubjectsForTemplate,
   getSubjectForContactIndex,
   DEFAULT_SUBJECTS,
+  SIGNATURE_TEMPLATE,
+  hasSignaturePresent,
+  mergeTemplate,
 } from "../templateMerge";
 
 describe("convertRawTemplate", () => {
@@ -102,15 +105,27 @@ CU Boulder | {Major}
 });
 
 describe("VARIABLE_ALIASES", () => {
-  it("contains all expected aliases", () => {
+  it("contains sender/signature aliases", () => {
     expect(VARIABLE_ALIASES["your name"]).toBe("Sender Name");
     expect(VARIABLE_ALIASES["my name"]).toBe("Sender Name");
     expect(VARIABLE_ALIASES.role).toBe("Sender Role");
     expect(VARIABLE_ALIASES.major).toBe("Sender Major");
     expect(VARIABLE_ALIASES["phone number"]).toBe("Sender Phone");
+    expect(VARIABLE_ALIASES.signature).toBe("Signature");
+  });
+
+  it("contains contact aliases with canonical targets", () => {
+    // {Email} at paste time = sender email (signature-block convention).
+    // Use {Recipient Email} explicitly for the contact's address.
     expect(VARIABLE_ALIASES.email).toBe("Sender Email");
+    expect(VARIABLE_ALIASES["recipient email"]).toBe("Email");
+    // {Name} defaults to first-name semantics for greetings. Use {Full Name}
+    // when you explicitly want the full contact.name field.
     expect(VARIABLE_ALIASES.name).toBe("First Name");
-    expect(VARIABLE_ALIASES["contact name"]).toBe("First Name");
+    expect(VARIABLE_ALIASES["full name"]).toBe("Name");
+    expect(VARIABLE_ALIASES["first name"]).toBe("First Name");
+    expect(VARIABLE_ALIASES["contact first name"]).toBe("First Name");
+    expect(VARIABLE_ALIASES["last name"]).toBe("Last Name");
     expect(VARIABLE_ALIASES["company name"]).toBe("Company");
     expect(VARIABLE_ALIASES.company).toBe("Company");
   });
@@ -159,6 +174,154 @@ describe("extractTemplateName", () => {
   it("returns fallback for plain text with no patterns", () => {
     const text = "This is a short plain text email with no patterns.";
     expect(extractTemplateName(text)).toBe("This is a short plain text email with no patterns.");
+  });
+});
+
+describe("canonical variable resolution", () => {
+  const sampleContact = {
+    id: "c1",
+    name: "Brady Darby",
+    email: "brady@mach.com",
+    first_name: "Brady",
+    company: "Mach",
+    "Sender Name": "Owen",
+    "Sender Role": "President",
+    "Sender Phone": "303-555-0100",
+    "Sender Email": "owen@colorado.edu",
+  };
+
+  it("resolves {{first_name}} from a first_name CSV column", () => {
+    expect(mergeTemplate("Hi {{first_name}}", sampleContact)).toBe("Hi Brady");
+  });
+
+  it("resolves {{First Name}} from the same first_name field", () => {
+    expect(mergeTemplate("Hi {{First Name}}", sampleContact)).toBe("Hi Brady");
+  });
+
+  it("resolves {{FirstName}} (no space)", () => {
+    expect(mergeTemplate("Hi {{FirstName}}", sampleContact)).toBe("Hi Brady");
+  });
+
+  it("resolves {{Name}} to the full contact name", () => {
+    expect(mergeTemplate("Hi {{Name}}", sampleContact)).toBe("Hi Brady Darby");
+  });
+
+  it("resolves {{Email}} to the contact email", () => {
+    expect(mergeTemplate("Reply to {{Email}}", sampleContact)).toBe("Reply to brady@mach.com");
+  });
+
+  it("resolves {{Company}} and {{Company Name}} identically", () => {
+    expect(mergeTemplate("{{Company}}", sampleContact)).toBe("Mach");
+    expect(mergeTemplate("{{Company Name}}", sampleContact)).toBe("Mach");
+    expect(mergeTemplate("{{company_name}}", sampleContact)).toBe("Mach");
+    expect(mergeTemplate("{{company}}", sampleContact)).toBe("Mach");
+  });
+
+  it("derives first name from contact.name when no first_name column", () => {
+    const noFirstName = { id: "c2", name: "Jane Doe", email: "j@x.com" };
+    expect(mergeTemplate("{{First Name}}", noFirstName)).toBe("Jane");
+    expect(mergeTemplate("{{first_name}}", noFirstName)).toBe("Jane");
+  });
+
+  it("derives last name from contact.name when no last_name column", () => {
+    expect(mergeTemplate("{{Last Name}}", sampleContact)).toBe("Darby");
+    expect(mergeTemplate("{{last_name}}", sampleContact)).toBe("Darby");
+  });
+
+  it("resolves sender fields via snake_case or spaced form", () => {
+    expect(mergeTemplate("{{sender_name}}", sampleContact)).toBe("Owen");
+    expect(mergeTemplate("{{Sender Name}}", sampleContact)).toBe("Owen");
+    expect(mergeTemplate("{{sender_role}}", sampleContact)).toBe("President");
+  });
+
+  it("paste converter handles {first_name} → {{First Name}}", () => {
+    const result = convertRawTemplate("Hi {first_name},");
+    expect(result.content).toBe("Hi {{First Name}},");
+    expect(result.mappings[0].isAlias).toBe(true);
+  });
+
+  it("paste converter handles {company_name} and {sender_email}", () => {
+    const result = convertRawTemplate("{company_name} / {sender_email}");
+    expect(result.content).toBe("{{Company}} / {{Sender Email}}");
+    expect(result.mappings.every((m) => m.isAlias)).toBe(true);
+  });
+
+  it("tolerates singular / plural typos (Companies, Emails)", () => {
+    expect(mergeTemplate("{{Companies}}", sampleContact)).toBe("Mach");
+    expect(mergeTemplate("{{Emails}}", sampleContact)).toBe("brady@mach.com");
+  });
+});
+
+describe("{{Signature}} expansion", () => {
+  const sampleContact = {
+    id: "c1",
+    name: "Brady",
+    email: "brady@mach.com",
+    "Sender Name": "Owen",
+    "Sender Role": "President",
+    "Sender Phone": "303-555-0100",
+    "Sender Email": "owen@colorado.edu",
+  };
+
+  it("expands {{Signature}} to the composed block with per-contact sender fields", () => {
+    const template = "{{Signature}}";
+    const merged = mergeTemplate(template, sampleContact);
+    expect(merged).toContain("Owen");
+    expect(merged).toContain("CU Hyperloop | President");
+    expect(merged).toContain("303-555-0100 | owen@colorado.edu");
+    expect(merged).not.toContain("{{Signature}}");
+  });
+
+  it("leaves sender subfields empty when contact lacks them", () => {
+    const bareContact = {
+      id: "c2",
+      name: "Jane",
+      email: "jane@x.com",
+    };
+    const merged = mergeTemplate("{{Signature}}", bareContact);
+    // Block structure still present, but the per-field values are empty
+    expect(merged).not.toContain("{{Signature}}");
+    expect(merged).toContain("Best,");
+    expect(merged).toContain("CU Hyperloop | ");
+    expect(merged).toContain("CU Boulder | ");
+  });
+
+  it("handles case-insensitive {{signature}} and {{ Signature }}", () => {
+    const merged = mergeTemplate("{{signature}}", sampleContact);
+    expect(merged).toContain("Owen");
+    const merged2 = mergeTemplate("{{ Signature }}", sampleContact);
+    expect(merged2).toContain("Owen");
+  });
+
+  it("SIGNATURE_TEMPLATE matches the declared format", () => {
+    expect(SIGNATURE_TEMPLATE).toContain("Best,");
+    expect(SIGNATURE_TEMPLATE).toContain("{{Sender Name}}");
+    expect(SIGNATURE_TEMPLATE).toContain("CU Hyperloop | {{Sender Role}}");
+    expect(SIGNATURE_TEMPLATE).toContain("CU Boulder | {{Sender Major}}");
+    expect(SIGNATURE_TEMPLATE).toContain("{{Sender Phone}} | {{Sender Email}}");
+  });
+});
+
+describe("hasSignaturePresent", () => {
+  it("detects {{Signature}} variable", () => {
+    expect(hasSignaturePresent("Best,\n{{Signature}}")).toBe(true);
+    expect(hasSignaturePresent("hi {{ signature }} bye")).toBe(true);
+  });
+
+  it("detects {{Sender Name}}", () => {
+    expect(hasSignaturePresent("Best,\n{{Sender Name}}\nRole, CU Hyperloop")).toBe(true);
+  });
+
+  it("detects {{Sender Role}} / Phone / Email / Major", () => {
+    expect(hasSignaturePresent("{{Sender Role}}")).toBe(true);
+    expect(hasSignaturePresent("{{Sender Phone}}")).toBe(true);
+    expect(hasSignaturePresent("{{Sender Email}}")).toBe(true);
+    expect(hasSignaturePresent("{{Sender Major}}")).toBe(true);
+  });
+
+  it("returns false when no signature markers present", () => {
+    expect(hasSignaturePresent("Hi {{First Name}}, hope you're well.")).toBe(false);
+    expect(hasSignaturePresent("Plain text with no variables.")).toBe(false);
   });
 });
 

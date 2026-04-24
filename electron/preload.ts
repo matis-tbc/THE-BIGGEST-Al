@@ -64,6 +64,7 @@ declare global {
         recipients: Array<{
           recipientId: string;
           toEmail: string;
+          additionalToEmails?: string[];
           ccEmails?: string[];
           subject: string;
           bodyHtml: string;
@@ -89,7 +90,12 @@ declare global {
         callback: (event: {
           index: number;
           total: number;
-          result: { recipientId: string; ok: boolean; messageId?: string; error?: string };
+          /** Present on final events. Absent for intermediate phase pings. */
+          result?: { recipientId: string; ok: boolean; messageId?: string; error?: string };
+          /** Present on intermediate "drafted" / "attaching" pings. */
+          phase?: "drafted" | "attaching";
+          /** Present on intermediate pings so the renderer can map to contact. */
+          recipientId?: string;
         }) => void,
       ) => () => void;
       sendDrafts: (payload: {

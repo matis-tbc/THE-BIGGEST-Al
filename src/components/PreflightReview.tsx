@@ -9,8 +9,7 @@ import {
   getSubjectForContactIndex,
 } from "../utils/templateMerge";
 import { sanitizeEmailHtml } from "../utils/sanitize";
-
-const MAX_ATTACHMENT_BYTES = 150 * 1024 * 1024;
+import { MAX_ATTACHMENT_BYTES } from "../utils/attachmentLimits";
 
 interface AttachmentCheckResult {
   path: string;
@@ -84,38 +83,50 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     let cancelled = false;
     setAttachmentChecksLoading(true);
     (async () => {
-      const next = new Map<string, AttachmentCheckResult>();
-      for (const contact of contacts) {
-        const raw = contact[attachmentColumnName];
-        if (typeof raw !== "string" || raw.trim().length === 0) continue;
-        const pathValue = raw.trim();
-        try {
+      const pending = contacts
+        .map((contact) => {
+          const raw = contact[attachmentColumnName];
+          if (typeof raw !== "string" || raw.trim().length === 0) return null;
+          return { contactId: contact.id, pathValue: raw.trim() };
+        })
+        .filter((x): x is { contactId: string; pathValue: string } => x !== null);
+
+      const settled = await Promise.allSettled(
+        pending.map(async ({ contactId, pathValue }) => {
           const res = await api.checkAttachmentPath(pathValue);
           const oversize =
             res?.exists &&
             typeof res.sizeBytes === "number" &&
             res.sizeBytes > MAX_ATTACHMENT_BYTES;
-          next.set(contact.id, {
+          const entry: AttachmentCheckResult = {
             path: pathValue,
             exists: !!res?.exists,
             sizeBytes: res?.sizeBytes,
             fileName: res?.fileName,
             error: res?.error,
             oversize: !!oversize,
-          });
-        } catch (err: any) {
-          next.set(contact.id, {
+          };
+          return [contactId, entry] as const;
+        }),
+      );
+
+      if (cancelled) return;
+      const next = new Map<string, AttachmentCheckResult>();
+      settled.forEach((result, idx) => {
+        if (result.status === "fulfilled") {
+          const [contactId, entry] = result.value;
+          next.set(contactId, entry);
+        } else {
+          const { contactId, pathValue } = pending[idx];
+          next.set(contactId, {
             path: pathValue,
             exists: false,
-            error: err?.message || String(err),
+            error: result.reason?.message || String(result.reason),
           });
         }
-        if (cancelled) return;
-      }
-      if (!cancelled) {
-        setAttachmentChecks(next);
-        setAttachmentChecksLoading(false);
-      }
+      });
+      setAttachmentChecks(next);
+      setAttachmentChecksLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -172,9 +183,19 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       contactIssues,
     };
 
-    const invalidEmails = contacts.filter(
-      (contact) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email),
-    );
+    // A contact is valid if its email cell contains at least one well-formed
+    // address. Multi-recipient cells (comma-separated) are common and handled
+    // by the dispatcher at send time.
+    const isValidEmailCell = (raw: string): boolean => {
+      if (!raw) return false;
+      const tokens = raw
+        .split(/[;,]+/)
+        .flatMap((t) => t.split(/\s+/))
+        .map((t) => t.trim())
+        .filter(Boolean);
+      return tokens.some((t) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t));
+    };
+    const invalidEmails = contacts.filter((contact) => !isValidEmailCell(contact.email));
     const duplicateEmailCount = (() => {
       const seen = new Set<string>();
       let duplicates = 0;
@@ -247,6 +268,27 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     const oversizeAttachments = attachmentResults.filter((r) => r.oversize);
     const totalAttachmentBytes = attachmentResults.reduce((sum, r) => sum + (r.sizeBytes || 0), 0);
 
+    const templateRoutingFailures = contacts
+      .filter((c) => !c.templateId && typeof c._originalTemplateName === "string")
+      .map((c) => ({
+        contactId: c.id,
+        contactName: c.name,
+        attemptedName: c._originalTemplateName as string,
+      }));
+
+    // Sender-profile match: csvParser marks `_unmatchedMember` on any row
+    // whose Member column value didn't match a saved profile.
+    const unmatchedMembers = contacts
+      .filter((c) => typeof c._unmatchedMember === "string")
+      .map((c) => ({
+        contactId: c.id,
+        contactName: c.name,
+        attemptedMember: c._unmatchedMember as string,
+      }));
+    const uniqueUnmatchedMembers = Array.from(
+      new Set(unmatchedMembers.map((m) => m.attemptedMember)),
+    );
+
     return {
       invalidEmails,
       duplicateEmailCount,
@@ -266,6 +308,9 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
         totalBytes: totalAttachmentBytes,
         loading: attachmentChecksLoading,
       },
+      templateRoutingFailures,
+      unmatchedMembers,
+      uniqueUnmatchedMembers,
     };
   }, [
     contacts,
@@ -293,12 +338,101 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
     };
   }, [selectedContact, previewIndex, getTemplateForContact]);
 
+  // Count contacts whose template references sender/signature fields but
+  // whose Sender Name didn't resolve (Member column missing or didn't match
+  // a Sender Profile). Only meaningful when templates include signature-like
+  // variables; otherwise this whole check is skipped.
+  const unresolvedSenderCount = useMemo(() => {
+    let count = 0;
+    for (const contact of contacts) {
+      const tmpl = getTemplateForContact(contact);
+      if (!tmpl) continue;
+      const needsSender = /\{\{\s*(Signature|Sender\s+Name)\s*\}\}/i.test(tmpl.content);
+      if (!needsSender) continue;
+      const senderName = (contact["Sender Name"] as string) || "";
+      if (!senderName.trim()) count++;
+    }
+    return count;
+  }, [contacts, getTemplateForContact]);
+
   const hasBlockingIssues =
     checks.invalidEmails.length > 0 ||
     checks.templateValidation.errors.length > 0 ||
     checks.emptyRecipientCount > 0 ||
     checks.perRow.missingCount > 0 ||
-    checks.perRow.oversizeCount > 0;
+    checks.perRow.oversizeCount > 0 ||
+    checks.templateRoutingFailures.length > 0 ||
+    checks.unmatchedMembers.length > 0 ||
+    unresolvedSenderCount > 0;
+
+  const exportPreflightCsv = () => {
+    const rows: string[][] = [
+      [
+        "name",
+        "email",
+        "company",
+        "template_name",
+        "template_variant_from_csv",
+        "attachment_filename",
+        "attachment_status",
+        "attachment_size_kb",
+        "subject_preview",
+      ],
+    ];
+    for (const contact of contacts) {
+      const tmpl = getTemplateForContact(contact);
+      const tmplName = tmpl?.name || "(none)";
+      const attemptedName =
+        typeof contact._originalTemplateName === "string" ? contact._originalTemplateName : "";
+      const check = attachmentChecks.get(contact.id);
+      const attachmentFilename = check?.fileName || "";
+      const attachmentStatus = check
+        ? check.oversize
+          ? "oversize"
+          : check.exists
+            ? "ok"
+            : "missing"
+        : attachmentColumnName
+          ? "no-path"
+          : "n/a";
+      const attachmentSizeKb =
+        check && typeof check.sizeBytes === "number"
+          ? String(Math.max(1, Math.round(check.sizeBytes / 1024)))
+          : "";
+      let subjectPreview = "";
+      if (tmpl) {
+        const subjectTemplate = getSubjectForContactIndex(tmpl, contacts.indexOf(contact));
+        subjectPreview = subjectTemplate ? mergeTemplate(subjectTemplate, contact) : "";
+      }
+      const company = typeof contact.company === "string" ? contact.company : "";
+      rows.push([
+        contact.name || "",
+        contact.email || "",
+        company,
+        tmplName,
+        attemptedName,
+        attachmentFilename,
+        attachmentStatus,
+        attachmentSizeKb,
+        subjectPreview,
+      ]);
+    }
+    const escapeCsv = (v: string) => {
+      if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+      return v;
+    };
+    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `preflight-report-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -360,6 +494,67 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
             </li>
             {checks.attachmentWarning && (
               <li className="text-yellow-500">{checks.attachmentWarning}</li>
+            )}
+            {unresolvedSenderCount > 0 && (
+              <li className="text-rose-400 pt-2 border-t border-slate-800 mt-2">
+                Signature: {unresolvedSenderCount} row
+                {unresolvedSenderCount === 1 ? "" : "s"} use{" "}
+                <code className="text-slate-100">{"{{Signature}}"}</code> or{" "}
+                <code className="text-slate-100">{"{{Sender Name}}"}</code> but the Sender Name
+                field is empty.
+                <span className="block text-[11px] text-slate-500 mt-1">
+                  Map the <code>Member</code> CSV column in Column Mapper, or add the sender to
+                  Sender Profiles so the sign-off resolves.
+                </span>
+              </li>
+            )}
+            {checks.unmatchedMembers.length > 0 && (
+              <li className="text-rose-400 pt-2 border-t border-slate-800 mt-2">
+                Sender profile: {checks.unmatchedMembers.length} row
+                {checks.unmatchedMembers.length === 1 ? "" : "s"} had a{" "}
+                <code className="text-slate-100">Member</code> value that didn't match any saved
+                profile.
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-slate-200">
+                    show unmatched members
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 text-[11px] text-slate-300 max-h-40 overflow-y-auto">
+                    {checks.uniqueUnmatchedMembers.map((m) => (
+                      <li key={m}>
+                        <code className="text-rose-300">{m}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                <span className="block text-[11px] text-slate-500 mt-1">
+                  Add these to Sender Profiles, or correct the CSV so sender fields (role, phone,
+                  email) populate for these rows.
+                </span>
+              </li>
+            )}
+            {checks.templateRoutingFailures.length > 0 && (
+              <li className="text-rose-400 pt-2 border-t border-slate-800 mt-2">
+                Template routing: {checks.templateRoutingFailures.length} row
+                {checks.templateRoutingFailures.length === 1 ? "" : "s"} had a template name in CSV
+                that did not match any saved template.
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-slate-200">
+                    show rows
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 text-[11px] text-slate-300 max-h-40 overflow-y-auto">
+                    {checks.templateRoutingFailures.map((f) => (
+                      <li key={f.contactId}>
+                        <span className="text-slate-400">{f.contactName}</span> — CSV said{" "}
+                        <code className="text-rose-300">{f.attemptedName}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                <span className="block text-[11px] text-slate-500 mt-1">
+                  These rows will fall back to the default template. Fix by renaming templates in
+                  Template Manager or correcting the CSV.
+                </span>
+              </li>
             )}
             {checks.perRow.active && (
               <>
@@ -535,6 +730,53 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
         </div>
       </div>
 
+      {contacts.length > 0 && (
+        <details className="card">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+            Per-row template assignment ({contacts.length})
+          </summary>
+          <div className="mt-3 space-y-1 max-h-64 overflow-y-auto">
+            <div className="grid grid-cols-[1fr_1.5fr_1.2fr_auto] gap-2 text-[10px] uppercase tracking-wider text-slate-500 px-3 pb-1 border-b border-slate-800">
+              <span>Contact</span>
+              <span>Email</span>
+              <span>Template</span>
+              <span></span>
+            </div>
+            {contacts.map((contact, idx) => {
+              const assigned = getTemplateForContact(contact);
+              const hasExplicit = !!contact.templateId;
+              const hadMismatch = typeof contact._originalTemplateName === "string";
+              const rowClass = hadMismatch
+                ? "text-rose-300 bg-rose-500/5"
+                : hasExplicit
+                  ? "text-slate-200"
+                  : "text-amber-300 bg-amber-500/5";
+              const tag = hadMismatch ? "mismatch" : hasExplicit ? "" : "default";
+              return (
+                <button
+                  key={contact.id}
+                  type="button"
+                  onClick={() => setPreviewIndex(idx)}
+                  className={`w-full grid grid-cols-[1fr_1.5fr_1.2fr_auto] gap-2 text-xs hover:bg-slate-900/70 rounded-lg px-3 py-1.5 text-left ${rowClass}`}
+                >
+                  <span className="font-medium truncate">{contact.name}</span>
+                  <span className="text-slate-500 truncate">{contact.email}</span>
+                  <span className="truncate">
+                    {assigned?.name || "(none)"}
+                    {hadMismatch && (
+                      <span className="ml-1 text-[10px] text-rose-400/80">
+                        (CSV: {contact._originalTemplateName})
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">{tag}</span>
+                </button>
+              );
+            })}
+          </div>
+        </details>
+      )}
+
       {checks.perRow.active && attachmentChecks.size > 0 && (
         <details className="card">
           <summary className="cursor-pointer text-sm font-semibold text-slate-200">
@@ -585,17 +827,26 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
         </details>
       )}
 
-      <div className="flex justify-between">
+      <div className="flex justify-between items-center gap-3">
         <button onClick={onBack} className="btn-secondary">
           Back
         </button>
-        <button
-          onClick={onContinue}
-          disabled={hasBlockingIssues}
-          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Continue to Draft Creation
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => exportPreflightCsv()}
+            className="btn-secondary"
+            title="Download a CSV report of what each recipient will receive"
+          >
+            Export report CSV
+          </button>
+          <button
+            onClick={onContinue}
+            disabled={hasBlockingIssues}
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Continue to Draft Creation
+          </button>
+        </div>
       </div>
     </div>
   );

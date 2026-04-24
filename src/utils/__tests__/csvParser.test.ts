@@ -197,6 +197,43 @@ describe("parseCSVLine", () => {
   });
 });
 
+describe("inferColumnTypes - attachmentPath detection", () => {
+  it("detects a column of POSIX file paths", () => {
+    const rows = [
+      ["Mach", "brady@mach.com", "/Users/matis/Desktop/sponsor_packets/Thank You Mach.pdf"],
+      ["Trimble", "rep@trimble.com", "/Users/matis/Desktop/sponsor_packets/Thank You Trimble.pdf"],
+      ["Chevron", "rep@chevron.com", "/Users/matis/Desktop/sponsor_packets/Thank You Chevron.pdf"],
+    ];
+    const result = inferColumnTypes(rows);
+    const attachmentCol = result.find((c) => c.inferredType === "attachmentPath");
+    expect(attachmentCol).toBeDefined();
+    expect(attachmentCol!.index).toBe(2);
+    expect(attachmentCol!.suggestedHeader).toBe("attachment_path");
+  });
+
+  it("detects a column using ~ home-relative paths", () => {
+    const rows = [
+      ["A", "a@x.com", "~/Desktop/sponsor_packets/Thank You A.pdf"],
+      ["B", "b@x.com", "~/Desktop/sponsor_packets/Thank You B.pdf"],
+      ["C", "c@x.com", "~/Desktop/sponsor_packets/Thank You C.pdf"],
+    ];
+    const result = inferColumnTypes(rows);
+    const attachmentCol = result.find((c) => c.inferredType === "attachmentPath");
+    expect(attachmentCol).toBeDefined();
+  });
+
+  it("does not flag a non-path column as attachmentPath", () => {
+    const rows = [
+      ["Mach", "brady@mach.com", "Gold"],
+      ["Trimble", "rep@trimble.com", "Gold"],
+      ["Chevron", "rep@chevron.com", "Gold"],
+    ];
+    const result = inferColumnTypes(rows);
+    const attachmentCol = result.find((c) => c.inferredType === "attachmentPath");
+    expect(attachmentCol).toBeUndefined();
+  });
+});
+
 describe("edge cases", () => {
   it("handles single row data", () => {
     const rows = [["John Smith", "Sales Rep", "Acme", "john@acme.com"]];

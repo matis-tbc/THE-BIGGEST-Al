@@ -26,6 +26,10 @@ import {
   DEFAULT_SUBJECTS,
 } from "../utils/templateMerge";
 
+// A subject row is considered "empty" when it's blank or whitespace only.
+// When every row is empty, the dispatcher falls back to DEFAULT_SUBJECTS.
+const allSubjectsEmpty = (subjects: string[]): boolean => subjects.every((s) => !s || !s.trim());
+
 interface Contact {
   id: string;
   name: string;
@@ -85,16 +89,20 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
   const rawTextareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Default variables that are always available
-  const defaultVariables = [
-    "name",
-    "email",
-    "company",
-    "phone",
-    "address",
-    "position",
-    "department",
+  // Canonical variable set surfaced as chips. Organized into two groups so the
+  // user can tell signature-block tokens apart from per-recipient merge fields.
+  // Each canonical name resolves through the alias table in templateMerge.ts,
+  // so `first_name`, `First Name`, and `firstname` all map to the same value.
+  const contactCanonicals = ["First Name", "Name", "Company", "Email"];
+  const senderCanonicals = [
+    "Signature",
+    "Sender Name",
+    "Sender Role",
+    "Sender Phone",
+    "Sender Email",
   ];
+  // Internal / non-merge keys that should never appear as chips.
+  const hiddenKeys = new Set(["id", "templateId", "_originalTemplateName", "_unmatchedMember"]);
 
   // Initialize content from template
   useEffect(() => {
@@ -150,6 +158,42 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
           textarea.focus();
           textarea.setSelectionRange(start + variableText.length, start + variableText.length);
         }, 0);
+      }
+    }
+  };
+
+  const handleInsertSignatureBlock = () => {
+    // The {{Signature}} expansion already includes "Best,\n\n" at the top
+    // plus the gold-styled CU Hyperloop / CU Boulder lines. Just insert the
+    // variable — the renderer handles formatting.
+    const block = "\n\n{{Signature}}";
+    if (editorMode === "visual") {
+      const textarea = bodyTextareaRef.current;
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newText = visualBody.substring(0, start) + block + visualBody.substring(end);
+        setVisualBody(newText);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + block.length, start + block.length);
+        }, 0);
+      } else {
+        setVisualBody(`${visualBody.replace(/\s+$/, "")}${block}`);
+      }
+    } else {
+      const textarea = rawTextareaRef.current;
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newText = rawContent.substring(0, start) + block + rawContent.substring(end);
+        setRawContent(newText);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + block.length, start + block.length);
+        }, 0);
+      } else {
+        setRawContent(`${rawContent.replace(/\s+$/, "")}${block}`);
       }
     }
   };
@@ -321,12 +365,50 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
   };
 
   const preview = getPreviewContent();
-  const allVariables = Array.from(
-    new Set([...defaultVariables, ...availableVariables, ...templateTags]),
+
+  // Build the chip groups. `contact` + `sender` are canonical; `csv` surfaces
+  // any extra columns in imported contacts so the user can discover custom
+  // merge fields (e.g. `paragraph`, `canva_page`). Anything already covered by
+  // the canonical groups is filtered out of `csv` to avoid duplicate chips.
+  const canonicalSet = new Set(
+    [...contactCanonicals, ...senderCanonicals].map((v) => v.toLowerCase()),
   );
-  const filteredVariables = allVariables.filter((variable) =>
-    variable.toLowerCase().includes(searchTerm.toLowerCase()),
+  const csvVariables = availableVariables.filter(
+    (v) => !hiddenKeys.has(v) && !v.startsWith("_") && !canonicalSet.has(v.toLowerCase()),
   );
+  const variableGroups: Array<{ label: string; variables: string[] }> = [
+    { label: "Contact", variables: contactCanonicals },
+    { label: "Sender (Signature)", variables: senderCanonicals },
+  ];
+  if (csvVariables.length > 0) {
+    variableGroups.push({ label: "CSV Columns", variables: csvVariables });
+  }
+  if (templateTags.length > 0) {
+    variableGroups.push({ label: "Tags", variables: templateTags });
+  }
+
+  const searchNeedle = searchTerm.trim().toLowerCase();
+  const filteredGroups = variableGroups
+    .map((g) => ({
+      ...g,
+      variables: searchNeedle
+        ? g.variables.filter((v) => v.toLowerCase().includes(searchNeedle))
+        : g.variables,
+    }))
+    .filter((g) => g.variables.length > 0);
+  const anyVariables = variableGroups.some((g) => g.variables.length > 0);
+
+  // Resolve a canonical to its sample value from the first contact (if any)
+  // so chip tooltips can preview what the variable will render as.
+  const resolveSampleValue = (variable: string): string => {
+    if (!contacts.length) return "";
+    const sample = contacts[0];
+    try {
+      return mergeTemplate(`{{${variable}}}`, sample).trim();
+    } catch {
+      return "";
+    }
+  };
 
   const handleAddSubject = () => {
     setVisualSubjects([...visualSubjects, ""]);
@@ -521,33 +603,56 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
         </div>
 
         {/* Variable Picker */}
-        {allVariables.length > 0 && (
+        {anyVariables && (
           <div className="px-4 py-2 border-b border-gray-600 bg-gray-800">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-medium text-gray-400">
-                Available Variables (click to insert)
-              </div>
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-500" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Filter variables..."
-                  className="pl-8 pr-2 py-1 text-xs border border-gray-600 rounded bg-gray-900 text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
-                />
+              <div className="text-xs font-medium text-gray-400">Variables (click to insert)</div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleInsertSignatureBlock}
+                  className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-500/10 text-yellow-300 hover:bg-yellow-500/20 border border-yellow-500/30"
+                  title="Appends Best, + {{Signature}} (pulls from the active Sender Profile per recipient)"
+                >
+                  + Signature block
+                </button>
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-500" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Filter variables..."
+                    className="pl-8 pr-2 py-1 text-xs border border-gray-600 rounded bg-gray-900 text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
+                  />
+                </div>
               </div>
             </div>
-            {filteredVariables.length > 0 ? (
-              <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1">
-                {filteredVariables.map((variable) => (
-                  <button
-                    key={variable}
-                    onClick={() => handleInsertVariable(variable)}
-                    className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-900/30 text-blue-300 hover:bg-blue-800"
-                  >
-                    {`{{${variable}}}`}
-                  </button>
+            {filteredGroups.length > 0 ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto p-1">
+                {filteredGroups.map((group) => (
+                  <div key={group.label}>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                      {group.label}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {group.variables.map((variable) => {
+                        const sample = resolveSampleValue(variable);
+                        const tooltip = sample
+                          ? `{{${variable}}} → "${sample.length > 60 ? `${sample.slice(0, 60)}…` : sample}"`
+                          : `{{${variable}}}`;
+                        return (
+                          <button
+                            key={variable}
+                            onClick={() => handleInsertVariable(variable)}
+                            title={tooltip}
+                            className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-900/30 text-blue-300 hover:bg-blue-800"
+                          >
+                            {`{{${variable}}}`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -573,6 +678,16 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
                   <Plus className="h-3 w-3 mr-1" /> Add Subject Option
                 </button>
               </div>
+              {allSubjectsEmpty(visualSubjects) && (
+                <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-[11px] text-yellow-200/90">
+                  No subject set — at send time this template falls back to:
+                  <ul className="mt-1 space-y-0.5 font-mono text-yellow-100">
+                    {DEFAULT_SUBJECTS.map((s) => (
+                      <li key={s}>· {s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="space-y-2">
                 {visualSubjects.map((subject, index) => (
                   <div key={index} className="flex items-center gap-2">
@@ -583,7 +698,7 @@ export const EnhancedTemplateEditor: React.FC<EnhancedTemplateEditorProps> = ({
                       type="text"
                       value={subject}
                       onChange={(e) => handleUpdateSubject(index, e.target.value)}
-                      placeholder="Enter subject line..."
+                      placeholder={DEFAULT_SUBJECTS[index] || "Enter subject line..."}
                       className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-yellow-500/50 focus:ring-1 focus:ring-yellow-500/50 transition-colors"
                     />
                     {visualSubjects.length > 1 && (

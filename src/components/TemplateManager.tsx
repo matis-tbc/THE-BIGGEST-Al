@@ -10,6 +10,8 @@ import {
   convertRawTemplate,
   extractTemplateName,
   getSubjectsForTemplate,
+  hasSignaturePresent,
+  SIGNATURE_TEMPLATE,
 } from "../utils/templateMerge";
 import type { ConvertedTemplate } from "../utils/templateMerge";
 import { projectStore, type StoredTemplate } from "../services/projectStore";
@@ -49,6 +51,15 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [showMoreTemplates, setShowMoreTemplates] = useState(false);
+  const [showFirstRunBanner, setShowFirstRunBanner] = useState(() => {
+    try {
+      return window.localStorage.getItem("email-drafter.show-first-run-notice") === "pending";
+    } catch {
+      return false;
+    }
+  });
+
   // Paste Template state
   const [showPasteImport, setShowPasteImport] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -57,16 +68,22 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
   const [pasteSubjects, setPasteSubjects] = useState<string[]>(DEFAULT_SUBJECTS);
   const [showSubjectEdit, setShowSubjectEdit] = useState(false);
   const [showMappingDetails, setShowMappingDetails] = useState(false);
+  const [appendSignature, setAppendSignature] = useState(true);
   const convertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
 
   const availableVariables = useMemo(() => {
+    // Collect keys across all contacts. Drop internal markers (`_` prefixed),
+    // reserved keys (`id`, `templateId`), and empty-value keys. These are not
+    // useful as merge variables and would clutter the chip list.
+    const HIDDEN = new Set(["id", "templateId"]);
     const variables = new Set<string>();
     contacts.forEach((contact) => {
       Object.keys(contact).forEach((key) => {
-        if (key !== "id" && contact[key]) {
-          variables.add(key);
-        }
+        if (HIDDEN.has(key)) return;
+        if (key.startsWith("_")) return;
+        if (!contact[key]) return;
+        variables.add(key);
       });
     });
     return Array.from(variables);
@@ -221,8 +238,136 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
     return contacts.filter((c) => !c.templateId).length;
   }, [contacts]);
 
+  const rankedTemplates = useMemo(() => {
+    return [...templates].sort((a, b) => {
+      const aUse = a.useCount ?? 0;
+      const bUse = b.useCount ?? 0;
+      if (aUse !== bUse) return bUse - aUse;
+      const aLast = a.lastUsedAt || "";
+      const bLast = b.lastUsedAt || "";
+      if (aLast !== bLast) return bLast.localeCompare(aLast);
+      return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+    });
+  }, [templates]);
+
+  const topTemplates = rankedTemplates.slice(0, 3);
+  const moreTemplates = rankedTemplates.slice(3);
+
+  const renderTemplateCard = (template: StoredTemplate) => (
+    <div
+      key={template.id}
+      className={`border rounded-xl p-4 cursor-pointer transition-colors ${
+        selectedTemplate?.id === template.id
+          ? "border-yellow-500 bg-yellow-500/10"
+          : "border-slate-700 hover:border-slate-600 bg-slate-800/50"
+      }`}
+      onClick={() => setSelectedTemplate(template)}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="font-medium text-slate-200">{template.name}</h4>
+          <p className="text-sm text-slate-400">
+            {template.variables.length} variables:{" "}
+            {template.variables.map((v) => `{{${v}}}`).join(", ")}
+          </p>
+          {(template.useCount ?? 0) > 0 && (
+            <p className="text-[11px] text-slate-500 mt-1">
+              Used {template.useCount}×
+              {template.lastUsedAt
+                ? ` · last ${new Date(template.lastUsedAt).toLocaleDateString()}`
+                : ""}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedTemplate(template);
+              setTimeout(
+                () => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                100,
+              );
+            }}
+            className="p-1.5 text-slate-500 hover:text-yellow-500 transition-colors"
+            title="Edit template"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              <path d="m15 5 4 4" />
+            </svg>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm(`Delete "${template.name}"?`)) {
+                handleDeleteTemplate(template.id);
+              }
+            }}
+            className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
+            title="Delete template"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+          </button>
+          <input
+            type="radio"
+            checked={selectedTemplate?.id === template.id}
+            onChange={() => setSelectedTemplate(template)}
+            className="h-4 w-4 text-yellow-500 focus:ring-yellow-500 border-slate-600 bg-slate-800"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      {showFirstRunBanner && (
+        <div className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100 flex items-start justify-between gap-3">
+          <div>
+            <div className="font-medium text-cyan-200 mb-1">Starter templates loaded</div>
+            <div className="text-xs text-cyan-200/80">
+              {templates.length} templates were auto-seeded so you can paste, edit, or delete to get
+              started fast. Nothing sends until you run a campaign.
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              try {
+                window.localStorage.setItem("email-drafter.show-first-run-notice", "dismissed");
+              } catch {}
+              setShowFirstRunBanner(false);
+            }}
+            className="text-cyan-300 hover:text-cyan-100 text-xs flex-shrink-0"
+          >
+            Got it
+          </button>
+        </div>
+      )}
       <div>
         <h2 className="text-2xl font-bold text-white mb-2">Email Template</h2>
         {unmappedCount > 0 && unmappedCount < contacts.length ? (
@@ -534,18 +679,52 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
                   )}
                 </div>
 
+                {/* Signature auto-append — only when the pasted content lacks
+                    any sender/signature field. User can opt out if they want
+                    to hand-write the sign-off. */}
+                {!hasSignaturePresent(convertedResult.content) && (
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={appendSignature}
+                        onChange={(e) => setAppendSignature(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span className="text-xs text-slate-300">
+                        <span className="font-medium text-slate-100">Append default signature</span>{" "}
+                        <code className="text-yellow-300">{"{{Signature}}"}</code>
+                        <span className="block mt-1 text-slate-500 font-mono text-[11px] whitespace-pre-line">
+                          {SIGNATURE_TEMPLATE}
+                        </span>
+                        <span className="block mt-1 text-slate-500">
+                          Resolves per-recipient from the matched Sender Profile. Uncheck if this
+                          template has its own sign-off.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                )}
+
                 {/* Save */}
                 <button
                   onClick={async () => {
                     if (!pasteTemplateName.trim() || !convertedResult) return;
                     setIsLoading(true);
                     try {
-                      const variables = extractVariables(convertedResult.content);
+                      const shouldAppend =
+                        appendSignature && !hasSignaturePresent(convertedResult.content);
+                      const finalContent = shouldAppend
+                        ? `${convertedResult.content.replace(/\s+$/, "")}\n\n{{Signature}}`
+                        : convertedResult.content;
+                      // {{Signature}} contains "Best," already; we don't need
+                      // to prepend anything.
+                      const variables = extractVariables(finalContent);
                       const template: StoredTemplate = {
                         id: `template-${Date.now()}`,
                         name: pasteTemplateName.trim(),
                         subjects: pasteSubjects.filter((s) => s.trim()),
-                        content: convertedResult.content,
+                        content: finalContent,
                         variables,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
@@ -561,6 +740,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
                       setPasteSubjects(DEFAULT_SUBJECTS);
                       setShowSubjectEdit(false);
                       setShowMappingDetails(false);
+                      setAppendSignature(true);
                     } catch (err) {
                       console.error("Failed to save pasted template:", err);
                       setError("Failed to save template.");
@@ -607,89 +787,40 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
               + New Template
             </button>
           </div>
-          {templates.map((template) => (
-            <div
-              key={template.id}
-              className={`border rounded-xl p-4 cursor-pointer transition-colors ${
-                selectedTemplate?.id === template.id
-                  ? "border-yellow-500 bg-yellow-500/10"
-                  : "border-slate-700 hover:border-slate-600 bg-slate-800/50"
-              }`}
-              onClick={() => setSelectedTemplate(template)}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium text-slate-200">{template.name}</h4>
-                  <p className="text-sm text-slate-400">
-                    {template.variables.length} variables:{" "}
-                    {template.variables.map((v) => `{{${v}}}`).join(", ")}
-                  </p>
+          {topTemplates.map((template) => renderTemplateCard(template))}
+          {moreTemplates.length > 0 && (
+            <div className="border border-slate-800 rounded-xl bg-slate-900/40 overflow-hidden">
+              <button
+                onClick={() => setShowMoreTemplates((prev) => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/40 transition-colors"
+              >
+                <span>
+                  {showMoreTemplates
+                    ? "Hide older templates"
+                    : `Show ${moreTemplates.length} more saved template${moreTemplates.length === 1 ? "" : "s"}`}
+                </span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`transition-transform ${showMoreTemplates ? "rotate-180" : ""}`}
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              {showMoreTemplates && (
+                <div className="border-t border-slate-800 p-3 space-y-3">
+                  {moreTemplates.map((template) => renderTemplateCard(template))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedTemplate(template);
-                      setTimeout(
-                        () =>
-                          editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                        100,
-                      );
-                    }}
-                    className="p-1.5 text-slate-500 hover:text-yellow-500 transition-colors"
-                    title="Edit template"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                      <path d="m15 5 4 4" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete "${template.name}"?`)) {
-                        handleDeleteTemplate(template.id);
-                      }
-                    }}
-                    className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
-                    title="Delete template"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M3 6h18" />
-                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                    </svg>
-                  </button>
-                  <input
-                    type="radio"
-                    checked={selectedTemplate?.id === template.id}
-                    onChange={() => setSelectedTemplate(template)}
-                    className="h-4 w-4 text-yellow-500 focus:ring-yellow-500 border-slate-600 bg-slate-800"
-                  />
-                </div>
-              </div>
+              )}
             </div>
-          ))}
+          )}
         </div>
       )}
 

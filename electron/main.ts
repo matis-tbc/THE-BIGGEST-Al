@@ -29,6 +29,7 @@ const metricsRepo = require("./repository/metrics");
 const campaignsRepo = require("./repository/campaigns");
 const { isMigrated, runMigration } = require("./migrate-from-localstorage");
 const { classifyAndPersist, reclassify } = require("./classifyReply");
+const { MAX_ATTACHMENT_BYTES } = require("./attachmentLimits");
 
 const isDev = process.env.NODE_ENV === "development";
 const OAUTH_PORT = 3000;
@@ -60,8 +61,6 @@ let pendingAuth: PendingAuth | null = null;
 function getPendingAuthStorePath(): string {
   return path.join(app.getPath("userData"), "pending-auth.json");
 }
-const MAX_ATTACHMENT_BYTES = 150 * 1024 * 1024; // Graph per-message cap
-
 const MIME_BY_EXT: Record<string, string> = {
   ".pdf": "application/pdf",
   ".png": "image/png",
@@ -129,10 +128,29 @@ ipcMain.handle("tools:split-packet", async (event: any, rawInput: string, rawOut
     return { ok: false, error: `input PDF not found at ${inputPath}` };
   }
   await fsp.mkdir(outputPath, { recursive: true });
+  const SPLIT_TIMEOUT_MS = 60 * 1000;
+  const SIGKILL_GRACE_MS = 2 * 1000;
   return await new Promise((resolve) => {
     const child = spawn(pythonBin, [scriptPath, "--input", inputPath, "--output", outputPath], {
       cwd: scriptDir,
     });
+    let settled = false;
+    const settle = (result: any) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const timeoutHandle = setTimeout(() => {
+      try {
+        child.kill("SIGTERM");
+      } catch {}
+      setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+      }, SIGKILL_GRACE_MS);
+      settle({ ok: false, error: `split timed out after ${SPLIT_TIMEOUT_MS / 1000} seconds` });
+    }, SPLIT_TIMEOUT_MS);
     const emit = (line: string) => {
       try {
         event.sender.send("tools:split-packet:log", line);
@@ -150,23 +168,28 @@ ipcMain.handle("tools:split-packet", async (event: any, rawInput: string, rawOut
         .toString()
         .split(/\r?\n/)
         .filter((l: string) => l.length > 0)
-        .forEach((l: string) => emit(`[stderr] ${l}`));
+        .forEach((l: string) => {
+          emit(`[stderr] ${l}`);
+        });
     });
     child.on("close", async (code: number) => {
+      clearTimeout(timeoutHandle);
+      if (settled) return;
       if (code !== 0) {
-        resolve({ ok: false, error: `python exited with code ${code}` });
+        settle({ ok: false, error: `python exited with code ${code}` });
         return;
       }
       try {
         const files = await fsp.readdir(outputPath);
         const pdfs = files.filter((f: string) => f.toLowerCase().endsWith(".pdf"));
-        resolve({ ok: true, filesWritten: pdfs.length });
+        settle({ ok: true, filesWritten: pdfs.length });
       } catch (err: any) {
-        resolve({ ok: true, filesWritten: undefined, error: err?.message });
+        settle({ ok: true, filesWritten: undefined, error: err?.message });
       }
     });
     child.on("error", (err: Error) => {
-      resolve({ ok: false, error: err.message });
+      clearTimeout(timeoutHandle);
+      settle({ ok: false, error: err.message });
     });
   });
 });
@@ -495,7 +518,24 @@ ipcMain.handle(
         const recipientWithAttachment = perRowAttachment
           ? { ...recipient, attachment: perRowAttachment }
           : recipient;
-        result = await dispatchRecipient(authService, recipientWithAttachment, dispatchOptions);
+        // Emit intermediate phase events so the UI can show "Drafted" →
+        // "Uploading" → "Completed" transitions. Without this the status
+        // jumps straight from "drafting" to "completed" and the user
+        // thinks the attachment step was skipped.
+        const optsWithPhase = {
+          ...dispatchOptions,
+          onPhase: (phase: "drafted" | "attaching") => {
+            try {
+              event.sender.send(sendChannel, {
+                index: i,
+                total: payload.recipients.length,
+                phase,
+                recipientId: recipient.recipientId,
+              });
+            } catch (_e) {}
+          },
+        };
+        result = await dispatchRecipient(authService, recipientWithAttachment, optsWithPhase);
       }
       if (result.ok) submitted++;
       else failed++;

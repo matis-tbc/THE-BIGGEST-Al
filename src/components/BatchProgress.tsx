@@ -2,6 +2,7 @@ import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { BatchProcessor, type Contact, type SendOptions } from "../services/batchProcessor";
 import { SendOptionsPanel, type SendOptionsValue } from "./SendOptionsPanel";
+import { isoToLocalDatetime, setLastScheduledLocal } from "../services/userPrefs";
 
 interface Template {
   id: string;
@@ -48,6 +49,17 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
   onBack,
 }) => {
   const isNonOutreach = campaignKind !== "outreach";
+  // "Sending with attachments" covers both the single-file and per-row cases.
+  // We use this for UI copy + extra status columns so per-row campaigns
+  // don't get stripped-down counters just because `attachment` is null.
+  const hasAttachments = !!attachment || !!attachmentColumnName;
+  // Summarize per-row attachment coverage for the header line.
+  const perRowAttachmentCount = attachmentColumnName
+    ? contacts.filter((c) => {
+        const v = c[attachmentColumnName as keyof typeof c] as string | undefined;
+        return typeof v === "string" && v.trim().length > 0;
+      }).length
+    : 0;
   const processorRef = useRef<BatchProcessor | null>(null);
   const [statuses, setStatuses] = useState<ProcessingStatus[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -142,6 +154,14 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
       setDraftsSentResult(null);
       setIsProcessing(false);
 
+      // Remember the last scheduled time for outreach campaigns so the next
+      // send pre-fills to the same window. Non-outreach defaults to tomorrow
+      // 8 AM and should stay that way.
+      if (sendOptions.mode === "schedule" && sendOptions.scheduledForIso && !isNonOutreach) {
+        const local = isoToLocalDatetime(sendOptions.scheduledForIso);
+        if (local) setLastScheduledLocal(local);
+      }
+
       // Final progress update so the user sees the completed state
       if (latestResults.length > 0) {
         setStatuses([...latestResults]);
@@ -210,7 +230,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-100">Progress</h3>
           <span className="text-sm text-gray-400">
-            {attachment
+            {hasAttachments
               ? `${completedCount + failedCount === contacts.length ? contacts.length : draftedCount + attachingCount + completedCount + failedCount} of ${contacts.length} Drafts Created`
               : `Batch ${currentBatch} of ${totalBatches}`}
           </span>
@@ -220,7 +240,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
         <div className="mb-4">
           <div className="flex justify-between text-sm text-gray-400 mb-2">
             <span>
-              {attachment
+              {hasAttachments
                 ? completedCount + failedCount === contacts.length
                   ? `${completedCount + failedCount} of ${contacts.length} fully completed`
                   : attachingCount > 0 || draftedCount > 0 || completedCount > 0
@@ -240,7 +260,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
 
         {/* Status Counts */}
         <div
-          className={`grid gap-4 text-center ${attachment ? "grid-cols-3 md:grid-cols-6" : "grid-cols-4"}`}
+          className={`grid gap-4 text-center ${hasAttachments ? "grid-cols-3 md:grid-cols-6" : "grid-cols-4"}`}
         >
           <div className="bg-gray-700 rounded-lg p-3">
             <div className="text-2xl font-bold text-gray-400">{pendingCount}</div>
@@ -251,7 +271,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
             <div className="text-sm text-blue-400">Drafting</div>
           </div>
 
-          {attachment && (
+          {hasAttachments && (
             <>
               <div className="bg-indigo-900/30 rounded-lg p-3">
                 <div className="text-2xl font-bold text-indigo-400">{draftedCount}</div>
@@ -277,8 +297,18 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
 
       {/* Processing Details */}
       <div className="bg-gray-800 border border-gray-700 rounded-lg">
-        <div className="px-4 py-3 bg-gray-700 border-b border-gray-600">
+        <div className="px-4 py-3 bg-gray-700 border-b border-gray-600 flex items-center justify-between">
           <h3 className="text-sm font-medium text-gray-100">Contact Status</h3>
+          {attachmentColumnName && perRowAttachmentCount > 0 && (
+            <span className="text-[11px] text-gray-400">
+              Per-row attachments: {perRowAttachmentCount} of {contacts.length} rows have a file
+            </span>
+          )}
+          {attachment && !attachmentColumnName && (
+            <span className="text-[11px] text-gray-400">
+              Attachment: <span className="text-gray-200">{attachment.name}</span>
+            </span>
+          )}
         </div>
         <div className="max-h-64 overflow-y-auto">
           <div className="divide-y divide-gray-700">
@@ -363,6 +393,18 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-100">{contact.name}</p>
                       <p className="text-sm text-gray-400">{contact.email}</p>
+                      {attachmentColumnName && (
+                        <p className="text-[11px] text-slate-500 font-mono truncate max-w-md">
+                          {(() => {
+                            const raw = contact[attachmentColumnName as keyof typeof contact] as
+                              | string
+                              | undefined;
+                            if (!raw || !raw.trim()) return "no file";
+                            const base = raw.trim().split(/[\\/]/).pop();
+                            return `attach: ${base}`;
+                          })()}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-sm text-gray-400">

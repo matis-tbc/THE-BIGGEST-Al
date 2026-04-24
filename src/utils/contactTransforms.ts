@@ -32,7 +32,18 @@ export function dedupeByEmail(contacts: Contact[]): Contact[] {
 }
 
 export function filterValidEmails(contacts: Contact[]): Contact[] {
-  return contacts.filter((contact) => validateEmail(contact.email));
+  // Accept rows with multi-recipient email cells (comma/semicolon lists) as
+  // long as at least one token parses. Matches dispatch behavior.
+  return contacts.filter((contact) => {
+    const raw = contact.email || "";
+    if (!raw) return false;
+    const tokens = raw
+      .split(/[;,]+/)
+      .flatMap((t) => t.split(/\s+/))
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return tokens.some(validateEmail);
+  });
 }
 
 export function extractFirstNames(contacts: Contact[]): Contact[] {

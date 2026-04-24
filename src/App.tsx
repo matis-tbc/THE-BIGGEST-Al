@@ -121,6 +121,10 @@ function App() {
   useEffect(() => {
     console.info("[App] Renderer booted. electronAPI available:", Boolean(window.electronAPI));
     seedTemplates().catch(console.error);
+    // Trigger listTemplates() on boot so sponsor-template + normalization
+    // migrations in projectStore run without requiring the user to open
+    // Template Manager first. Cheap (a single localStorage read/write).
+    projectStore.listTemplates().catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -428,7 +432,7 @@ function App() {
     }));
   };
 
-  const runCampaign = async () => {
+  const runCampaign = async (contactIdFilter?: string[]) => {
     if (!appState.activeCampaignId) return;
     const campaign = campaignStore.getCampaign(appState.activeCampaignId);
     if (!campaign) return;
@@ -436,16 +440,42 @@ function App() {
     const savedTemplates = await projectStore.listTemplates();
     const template = savedTemplates.find((t) => t.id === campaign.templateId);
 
-    // Re-detect per-row attachments from the campaign's saved contacts.
-    const attachmentColumnName = campaign.contacts.some(
-      (c) => typeof c.attachment_path === "string" && c.attachment_path.trim().length > 0,
-    )
-      ? "attachment_path"
-      : null;
+    const selectedContacts =
+      contactIdFilter && contactIdFilter.length > 0
+        ? campaign.contacts.filter((c) => contactIdFilter.includes(c.id))
+        : campaign.contacts;
+
+    // Re-detect per-row attachments from the campaign's saved contacts. Look
+    // for any column whose key normalizes to "attachmentpath" (tolerates
+    // attachment_path / Attachment Path / attachmentPath / attachment-path)
+    // OR whose values look like file paths.
+    const attachmentColumnName = (() => {
+      if (selectedContacts.length === 0) return null;
+      const keys = new Set<string>();
+      selectedContacts.forEach((c) => {
+        for (const k of Object.keys(c)) keys.add(k);
+      });
+      const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+      const keyArr = Array.from(keys);
+      const byName = keyArr.find((k) => normalize(k) === "attachmentpath");
+      if (byName) return byName;
+      // Value-based fallback: any column where ≥60% of non-empty values look
+      // like a file path (contains "/" or starts with "~" or has an extension).
+      const pathish = /[/\\].+\.[A-Za-z0-9]{2,5}$|^~[/\\]|^[A-Za-z]:[/\\]/;
+      const byValue = keyArr.find((k) => {
+        const values = selectedContacts
+          .map((c) => (typeof c[k] === "string" ? (c[k] as string).trim() : ""))
+          .filter((v) => v.length > 0);
+        if (values.length === 0) return false;
+        const matches = values.filter((v) => pathish.test(v)).length;
+        return matches / values.length >= 0.6;
+      });
+      return byValue || null;
+    })();
 
     setAppState((prev) => ({
       ...prev,
-      contacts: campaign.contacts,
+      contacts: selectedContacts,
       attachmentColumnName,
       template: template
         ? {
@@ -459,6 +489,11 @@ function App() {
       templates: savedTemplates as unknown as Template[],
       currentStep: "attachment",
     }));
+  };
+
+  const retryFailedContacts = (contactIds: string[]) => {
+    if (contactIds.length === 0) return;
+    void runCampaign(contactIds);
   };
 
   const navigateFromPalette = useCallback((step: string) => {
@@ -742,7 +777,8 @@ function App() {
               onOpenTemplate={() =>
                 setAppState((prev) => ({ ...prev, currentStep: "campaign-template" }))
               }
-              onRunCampaign={runCampaign}
+              onRunCampaign={() => runCampaign()}
+              onRetryFailed={retryFailedContacts}
             />
           )}
 

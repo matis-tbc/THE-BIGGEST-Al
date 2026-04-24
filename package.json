@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
     "dev:react": "vite --host --port 5273 --strictPort",
-    "dev:electron": "wait-on http://localhost:5273 && cross-env NODE_ENV=development electron .",
+    "dev:electron": "npm run build:electron && wait-on http://localhost:5273 && cross-env NODE_ENV=development electron .",
     "build": "npm run build:react && npm run build:electron",
     "build:react": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",

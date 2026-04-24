@@ -1,12 +1,31 @@
 export interface TeamMember {
   id: string;
-  name: string; // Used mapping for {{Sender Name}} (e.g., "Nathaniel" in CSV)
+  /**
+   * Full display name that renders in `{{Sender Name}}` / the signature
+   * block. Can contain first + last name (e.g. "Owen Wojciak").
+   */
+  name: string;
+  /**
+   * Short identifier matched against the CSV `Member` column. Typically the
+   * first name (e.g. "Owen") so CSVs stay terse. If left blank, the full
+   * `name` is used for matching (backward compatible with old profiles).
+   */
+  identifier?: string;
   role: string; // Used mapping for {{Sender Role}}
   major: string; // Used mapping for {{Sender Major}}
   phone: string; // Used mapping for {{Sender Phone}}
   email: string; // Used mapping for {{Sender Email}}
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * The key used to match a profile against a CSV Member value. Prefer the
+ * explicit identifier; fall back to the full name for profiles created
+ * before the split.
+ */
+export function getMemberIdentifier(m: Pick<TeamMember, "name" | "identifier">): string {
+  return (m.identifier && m.identifier.trim()) || m.name;
 }
 
 export interface TeamStore {

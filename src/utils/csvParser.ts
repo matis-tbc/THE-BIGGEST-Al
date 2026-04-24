@@ -1,4 +1,4 @@
-import { teamStore } from "../services/teamStore";
+import { getMemberIdentifier, teamStore } from "../services/teamStore";
 
 export interface ParsedContact {
   name?: string;
@@ -278,12 +278,21 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
 
     // Inject Dynamic Signature fields if the CSV defined a "Member"
     if (memberName) {
-      // Find a case-insensitive match for the team member
-      const searchName = memberName.toLowerCase();
-      const memberProf = teamMembers.find((m) => {
-        const mName = m.name.toLowerCase();
-        return mName === searchName || mName.includes(searchName) || searchName.includes(mName);
-      });
+      // Match against the profile's `identifier` (short form, e.g. "Owen")
+      // with fallback to the full `name` for legacy profiles. The full
+      // display name (e.g. "Owen Wojciak") is what gets written into the
+      // signature block — keeping those two concerns separate so CSVs can
+      // stay terse while signatures render the full name.
+      const searchName = memberName.trim().toLowerCase();
+      const memberProf =
+        teamMembers.find((m) => {
+          const idKey = getMemberIdentifier(m).toLowerCase();
+          return idKey === searchName;
+        }) ||
+        teamMembers.find((m) => {
+          const idKey = getMemberIdentifier(m).toLowerCase();
+          return idKey.includes(searchName) || searchName.includes(idKey);
+        });
       if (memberProf) {
         contact["Sender Name"] = memberProf.name;
         contact["Sender Role"] = memberProf.role;
@@ -291,12 +300,15 @@ export async function parseCSV(csvText: string): Promise<ParsedContact[]> {
         contact["Sender Phone"] = memberProf.phone;
         contact["Sender Email"] = memberProf.email;
       } else {
-        // Fallback to literal text if no profile matched so tags don't just hang
+        // No profile matched this Member value. Leave sender subfields empty
+        // (NOT literal "{Setup role...}" text — that would render in emails)
+        // and flag the row via `_unmatchedMember` so Preflight can surface it.
         contact["Sender Name"] = memberName;
-        contact["Sender Role"] = "{Setup role in Team Manager}";
-        contact["Sender Major"] = "{Setup major in Team Manager}";
-        contact["Sender Phone"] = "{Setup phone in Team Manager}";
-        contact["Sender Email"] = "{Setup email in Team Manager}";
+        contact["Sender Role"] = "";
+        contact["Sender Major"] = "";
+        contact["Sender Phone"] = "";
+        contact["Sender Email"] = "";
+        contact._unmatchedMember = memberName;
       }
     }
 

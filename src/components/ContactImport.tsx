@@ -54,6 +54,9 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
   const [showColumnMapper, setShowColumnMapper] = useState(false);
   const [inferredColumns, setInferredColumns] = useState<ColumnInference[]>([]);
   const [rawPastedRows, setRawPastedRows] = useState<string[][]>([]);
+  const [duplicateCaseColumns, setDuplicateCaseColumns] = useState<
+    Array<{ lower: string; variants: string[] }>
+  >([]);
 
   useEffect(() => {
     projectStore.listTemplates().then(setTemplates).catch(console.error);
@@ -84,16 +87,36 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
     const normalizedContacts: Contact[] = [];
 
-    // Build a canonical key map: first occurrence of each lowercase key wins
+    // Build a canonical key map: first occurrence of each lowercase key wins.
+    // Track which lowercase keys had multiple case-variants so we can warn
+    // the user — otherwise a CSV with both `name` and `Name` silently merges
+    // and one column of data is dropped with no indication.
     const canonicalKeys = new Map<string, string>();
+    const mergedVariants = new Map<string, Set<string>>();
     parsedContacts.forEach((contact) => {
       Object.keys(contact).forEach((key) => {
         const lower = key.toLowerCase();
         if (!canonicalKeys.has(lower)) {
           canonicalKeys.set(lower, key);
         }
+        const bucket = mergedVariants.get(lower) || new Set<string>();
+        bucket.add(key);
+        mergedVariants.set(lower, bucket);
       });
     });
+    const duplicateCaseColumns: Array<{ lower: string; variants: string[] }> = [];
+    mergedVariants.forEach((variants, lower) => {
+      if (variants.size > 1) {
+        duplicateCaseColumns.push({ lower, variants: Array.from(variants) });
+      }
+    });
+    if (duplicateCaseColumns.length > 0) {
+      console.warn(
+        "[ContactImport] Merged case-variant columns:",
+        duplicateCaseColumns.map((d) => d.variants.join(" / ")).join(", "),
+      );
+    }
+    setDuplicateCaseColumns(duplicateCaseColumns);
 
     parsedContacts.forEach((contact, index) => {
       // Normalize keys so "Name" and "name" merge into a single canonical key
@@ -108,6 +131,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
       const { name, email, templateId, ...rest } = normalized as any;
       const cleanRest: Record<string, string> = {};
       let mappedTemplateId = templateId || undefined;
+      let originalTemplateName: string | undefined;
 
       for (const [k, v] of Object.entries(rest)) {
         if (v !== null && v !== undefined) {
@@ -118,15 +142,20 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
             typeof v === "string" &&
             v.trim()
           ) {
-            const searchLower = v.trim().toLowerCase();
-            const found = currentTemplates.find((t) => {
-              const templateLower = t.name.toLowerCase();
-              return (
-                templateLower === searchLower ||
-                templateLower.includes(searchLower) ||
-                searchLower.includes(templateLower)
-              );
-            });
+            const attempted = v.trim();
+            originalTemplateName = attempted;
+            // Match order:
+            //   1. Exact case-insensitive equality.
+            //   2. Equality after stripping whitespace/underscores/hyphens.
+            // NO more `.includes()` bidirectional fuzz — that silently routed
+            // e.g. CSV "Gen" to template "General Tunneling 1". Misses are
+            // captured in `_originalTemplateName` and surfaced in Preflight.
+            const searchLower = attempted.toLowerCase();
+            const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+            const normalizedSearch = normalize(attempted);
+            const found =
+              currentTemplates.find((t) => t.name.toLowerCase() === searchLower) ||
+              currentTemplates.find((t) => normalize(t.name) === normalizedSearch);
             if (found) mappedTemplateId = found.id;
           }
         }
@@ -136,6 +165,9 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
         name: name || email,
         email: email,
         templateId: mappedTemplateId,
+        ...(originalTemplateName && !mappedTemplateId
+          ? { _originalTemplateName: originalTemplateName }
+          : {}),
         ...cleanRest,
       });
     });
@@ -442,7 +474,20 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
     URL.revokeObjectURL(url);
   };
 
-  const validCount = contacts.filter((contact) => validateEmail(contact.email)).length;
+  // A contact is valid if its email cell contains at least one well-formed
+  // address. Multi-recipient cells (comma-separated) are common in the
+  // sponsor CSV and are handled by the dispatcher at send time.
+  const hasAnyValidEmail = (raw: string): boolean => {
+    if (!raw) return false;
+    const tokens = raw
+      .split(/[;,]+/)
+      .flatMap((t) => t.split(/\s+/))
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return tokens.some(validateEmail);
+  };
+
+  const validCount = contacts.filter((contact) => hasAnyValidEmail(contact.email)).length;
   const mappedCount = contacts.filter((contact) => !!contact.templateId).length;
   const isFullyMapped = contacts.length > 0 && mappedCount === contacts.length;
 
@@ -464,7 +509,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
 
   const handleContinueWithCurrentData = () => {
     if (validCount > 0) {
-      onContactsImported(contacts.filter((contact) => validateEmail(contact.email)));
+      onContactsImported(contacts.filter((contact) => hasAnyValidEmail(contact.email)));
     }
   };
 
@@ -497,6 +542,25 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
           fields.
         </p>
       </div>
+
+      {duplicateCaseColumns.length > 0 && (
+        <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
+          <div className="font-medium mb-1">
+            Merged {duplicateCaseColumns.length} case-variant column
+            {duplicateCaseColumns.length === 1 ? "" : "s"}
+          </div>
+          <div className="text-xs text-yellow-300/80 mb-1">
+            Your CSV had columns that differ only by case. The first version of each was kept and
+            the others merged into it — data from the other variants was dropped. If you intended
+            them as separate fields, rename one of them and re-import.
+          </div>
+          <ul className="text-xs text-yellow-200 font-mono mt-2 space-y-0.5">
+            {duplicateCaseColumns.map((d) => (
+              <li key={d.lower}>{d.variants.join("  /  ")}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 bg-slate-800/30">
         <div className="text-center">
@@ -852,7 +916,9 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
                                 handleCellChange(contact.id, header, event.target.value)
                               }
                               className={`input-field !py-1.5 ${
-                                header === "email" && contact.email && !validateEmail(contact.email)
+                                header === "email" &&
+                                contact.email &&
+                                !hasAnyValidEmail(contact.email)
                                   ? "!border-rose-500/50 !bg-rose-500/10"
                                   : ""
                               }`}
@@ -861,7 +927,7 @@ export const ContactImport: React.FC<ContactImportProps> = ({ onContactsImported
                         </td>
                       ))}
                     <td className="px-5 py-3 text-sm font-medium">
-                      {validateEmail(contact.email) ? (
+                      {hasAnyValidEmail(contact.email) ? (
                         <span className="text-emerald-500">Valid</span>
                       ) : (
                         <span className="text-rose-500">Invalid email</span>

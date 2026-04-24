@@ -68,9 +68,34 @@ function safeParse<T>(value: string | null, fallback: T): T {
   }
 }
 
+const KIND_MIGRATION_KEY = "email-drafter.kind-migrated.v1";
+
 class LocalCampaignStore {
+  private migrated = false;
+
   private load(): Campaign[] {
-    return safeParse<Campaign[]>(window.localStorage.getItem(CAMPAIGN_KEY), []);
+    const campaigns = safeParse<Campaign[]>(window.localStorage.getItem(CAMPAIGN_KEY), []);
+    // One-time migration: any campaign created before the `kind` field existed
+    // would silently be treated as "outreach" (stricter validation). Write the
+    // default through so old campaigns carry an explicit kind.
+    if (!this.migrated && !window.localStorage.getItem(KIND_MIGRATION_KEY)) {
+      this.migrated = true;
+      let changed = false;
+      const patched = campaigns.map((c) => {
+        if (c.kind === undefined) {
+          changed = true;
+          return { ...c, kind: "outreach" as CampaignKind };
+        }
+        return c;
+      });
+      if (changed) {
+        window.localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(patched));
+        console.info("[campaignStore] Migrated pre-kind campaigns → kind: 'outreach' (default).");
+      }
+      window.localStorage.setItem(KIND_MIGRATION_KEY, "true");
+      return patched;
+    }
+    return campaigns;
   }
 
   private save(campaigns: Campaign[]): void {
@@ -134,7 +159,7 @@ class LocalCampaignStore {
 
   updateCampaign(
     id: string,
-    partial: Partial<Pick<Campaign, "name" | "description" | "status">>,
+    partial: Partial<Pick<Campaign, "name" | "description" | "status" | "kind">>,
   ): Campaign | null {
     const campaign = this.getCampaign(id);
     if (!campaign) return null;

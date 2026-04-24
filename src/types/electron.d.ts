@@ -84,7 +84,9 @@ declare global {
         callback: (event: {
           index: number;
           total: number;
-          result: { recipientId: string; ok: boolean; messageId?: string; error?: string };
+          result?: { recipientId: string; ok: boolean; messageId?: string; error?: string };
+          phase?: "drafted" | "attaching";
+          recipientId?: string;
         }) => void,
       ) => () => void;
       sendDrafts: (payload: {

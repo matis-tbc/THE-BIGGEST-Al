@@ -29,6 +29,7 @@ export const MemberManager: React.FC<MemberManagerProps> = ({ onBack }) => {
     await teamStore.saveMember({
       id: isEditing || crypto.randomUUID(),
       name: editForm.name || "",
+      identifier: (editForm.identifier || "").trim() || undefined,
       role: editForm.role || "",
       major: editForm.major || "",
       phone: editForm.phone || "",
@@ -55,7 +56,7 @@ export const MemberManager: React.FC<MemberManagerProps> = ({ onBack }) => {
   const startCreate = () => {
     setIsCreating(true);
     setIsEditing(null);
-    setEditForm({ name: "", role: "", major: "", phone: "", email: "" });
+    setEditForm({ name: "", identifier: "", role: "", major: "", phone: "", email: "" });
   };
 
   const cancelEdit = () => {
@@ -118,14 +119,32 @@ export const MemberManager: React.FC<MemberManagerProps> = ({ onBack }) => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Identifier Name (Matches 'Member' col) *
+                      Full Name *
                     </label>
                     <input
                       className="input-field"
-                      placeholder="e.g. Matis"
+                      placeholder="e.g. Owen Wojciak"
                       value={editForm.name || ""}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                     />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Renders in {"{{Sender Name}}"} and the signature block.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Identifier (matches CSV Member)
+                    </label>
+                    <input
+                      className="input-field"
+                      placeholder={`e.g. ${(editForm.name || "").split(/\s+/)[0] || "Owen"}`}
+                      value={editForm.identifier || ""}
+                      onChange={(e) => setEditForm({ ...editForm, identifier: e.target.value })}
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Short name matched against CSV Member column. Leave blank to use the full
+                      name.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">
@@ -142,7 +161,7 @@ export const MemberManager: React.FC<MemberManagerProps> = ({ onBack }) => {
                     <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
                     <input
                       className="input-field"
-                      placeholder="e.g. Business Development Lead"
+                      placeholder="e.g. Organization President"
                       value={editForm.role || ""}
                       onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
                     />
@@ -153,7 +172,7 @@ export const MemberManager: React.FC<MemberManagerProps> = ({ onBack }) => {
                     </label>
                     <input
                       className="input-field"
-                      placeholder="e.g. Business Administration"
+                      placeholder="e.g. Civil Engineering"
                       value={editForm.major || ""}
                       onChange={(e) => setEditForm({ ...editForm, major: e.target.value })}
                     />
@@ -168,6 +187,35 @@ export const MemberManager: React.FC<MemberManagerProps> = ({ onBack }) => {
                       value={editForm.phone || ""}
                       onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                     />
+                  </div>
+                </div>
+
+                {/* Signature preview — visual approximation of what the
+                    email renders when a template uses `{{Signature}}` and the
+                    recipient's CSV Member column matches this profile. */}
+                <div className="mt-5 rounded-lg border border-slate-700 bg-white p-4">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-3">
+                    Signature preview
+                  </div>
+                  <div className="text-sm leading-snug" style={{ color: "#1F2937" }}>
+                    <div className="mb-2">Best,</div>
+                    <div>{editForm.name || "(Full Name)"}</div>
+                    <div>
+                      <strong style={{ color: "#CFB87C" }}>CU Hyperloop</strong> |{" "}
+                      {editForm.role || "(role)"}
+                    </div>
+                    <div>
+                      <strong style={{ color: "#CFB87C" }}>CU Boulder</strong> |{" "}
+                      {editForm.major || "(major)"}
+                    </div>
+                    <div>
+                      {editForm.phone || "(phone)"} | {editForm.email || "(email)"}
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-3">
+                    Rendered when a template uses{" "}
+                    <code className="text-yellow-600">{"{{Signature}}"}</code> and the recipient's
+                    CSV Member column matches this profile.
                   </div>
                 </div>
 
@@ -196,7 +244,17 @@ export const MemberManager: React.FC<MemberManagerProps> = ({ onBack }) => {
                   className="card p-5 flex items-center justify-between hover:border-slate-600 transition-colors"
                 >
                   <div>
-                    <h3 className="text-lg font-medium text-slate-100">{m.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-medium text-slate-100">{m.name}</h3>
+                      {m.identifier && m.identifier !== m.name && (
+                        <span
+                          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300 border border-slate-600"
+                          title="Matches this value in CSV Member column"
+                        >
+                          {m.identifier}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-sm text-slate-400 mt-1 flex gap-4">
                       <span>{m.role || "No role"}</span>
                       <span>•</span>

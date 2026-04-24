@@ -1,5 +1,7 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { validateEmail } from "../utils/csvParser";
+import { getLastScheduledLocal } from "../services/userPrefs";
 
 export type SendMode = "draft" | "send-now" | "schedule";
 
@@ -18,11 +20,15 @@ export interface SendOptionsValue {
 
 const DEFAULT_CC_EMAIL = "cuhyperloop@colorado.edu";
 
-function parseCcInput(raw: string): string[] {
+function parseCcInputRaw(raw: string): string[] {
   return raw
     .split(/[,;\s]+/)
     .map((v) => v.trim())
     .filter(Boolean);
+}
+
+export function parseCcInput(raw: string): string[] {
+  return parseCcInputRaw(raw).filter((v) => validateEmail(v));
 }
 
 function formatCcList(list: string[] | undefined): string {
@@ -82,8 +88,12 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
   const [accountName, setAccountName] = useState<string | null>(null);
   const [scopeWarning, setScopeWarning] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
+  // Initial scheduled time: if the caller provided a default (e.g. non-outreach
+  // campaigns default to tomorrow 8 AM), honor that first. Otherwise try the
+  // user's last-used scheduled time (useful during outreach when you often
+  // batch multiple sends to the same window). Fall back to now + 30 min.
   const [scheduledLocal, setScheduledLocal] = useState<string>(
-    defaultScheduledProp ?? nowPlus30Minutes(),
+    defaultScheduledProp ?? getLastScheduledLocal() ?? nowPlus30Minutes(),
   );
   const [ccInput, setCcInput] = useState<string>("");
   const [ccInitialized, setCcInitialized] = useState(false);
@@ -169,6 +179,10 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
 
   const showSchedule = current.mode === "schedule";
   const showStagger = current.mode === "send-now" || current.mode === "schedule";
+
+  const invalidCcTokens = useMemo(() => {
+    return parseCcInputRaw(ccInput).filter((v) => !validateEmail(v));
+  }, [ccInput]);
 
   return (
     <div className="space-y-5 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
@@ -267,9 +281,23 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
           placeholder={isHyperloop ? "No CC (sending from team inbox)" : "cuhyperloop@colorado.edu"}
           className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-sky-400 focus:outline-none"
         />
+        {invalidCcTokens.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {invalidCcTokens.map((token) => (
+              <span
+                key={token}
+                title="Not a valid email — will be skipped"
+                className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[11px] text-rose-300"
+              >
+                {token}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="text-[11px] text-slate-500">
           Applied to every draft. The active sender ({accountEmail || "…"}) is automatically
-          excluded, so you never CC yourself. Leave blank for no CC.
+          excluded, so you never CC yourself. Leave blank for no CC. Invalid emails are dropped
+          before sending.
         </div>
       </div>
 

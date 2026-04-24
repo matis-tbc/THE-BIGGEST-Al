@@ -16,7 +16,13 @@ import {
   X,
   Mail,
 } from "lucide-react";
-import { campaignStore, type Campaign, type GeneratedCompany } from "../services/campaignStore";
+import {
+  campaignStore,
+  type Campaign,
+  type CampaignKind,
+  type GeneratedCompany,
+  getCampaignKind,
+} from "../services/campaignStore";
 import { projectStore } from "../services/projectStore";
 import { validateEmail } from "../utils/csvParser";
 import { EmailGuesser } from "./EmailGuesser";
@@ -30,6 +36,7 @@ interface CampaignDetailProps {
   onOpenContacts: () => void;
   onOpenTemplate: () => void;
   onRunCampaign: () => void;
+  onRetryFailed?: (contactIds: string[]) => void;
 }
 
 export const CampaignDetail: React.FC<CampaignDetailProps> = ({
@@ -39,6 +46,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
   onOpenContacts,
   onOpenTemplate,
   onRunCampaign,
+  onRetryFailed,
 }) => {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("companies");
@@ -50,6 +58,8 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
   const [descValue, setDescValue] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
   const [templateName, setTemplateName] = useState<string | null>(null);
+  const [failedContactIds, setFailedContactIds] = useState<string[]>([]);
+  const [editingKind, setEditingKind] = useState(false);
 
   const reload = useCallback(() => {
     const c = campaignStore.getCampaign(campaignId);
@@ -74,6 +84,40 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
       setTemplateName(t?.name || null);
     });
   }, [campaign?.templateId]);
+
+  // Pull failed/bounced recipients from SQLite for this campaign and
+  // map them back to contact IDs by email so the retry flow can pass the
+  // filtered subset through the existing dispatch pipeline.
+  useEffect(() => {
+    if (!campaign) return;
+    const api: any = (window as any).electronAPI;
+    if (!api?.dbListRecipients) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows: any[] = await api.dbListRecipients({ campaignId });
+        if (cancelled || !Array.isArray(rows)) return;
+        const failedEmails = new Set<string>();
+        for (const r of rows) {
+          const status = (r.status || "").toLowerCase();
+          const email = (r.to_email || r.toEmail || "").toLowerCase();
+          if (!email) continue;
+          if (status === "failed" || status === "bounced") {
+            failedEmails.add(email);
+          }
+        }
+        const matched = campaign.contacts
+          .filter((c) => failedEmails.has((c.email || "").toLowerCase()))
+          .map((c) => c.id);
+        setFailedContactIds(matched);
+      } catch (err) {
+        console.warn("Failed to load failed recipients:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign, campaignId]);
 
   if (!campaign) {
     return (
@@ -142,7 +186,20 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
     reload();
   };
 
-  const validContactCount = campaign.contacts.filter((c) => validateEmail(c.email)).length;
+  // A contact cell is valid if it contains at least one well-formed address.
+  // Multi-recipient cells (comma-separated) are common and the dispatcher
+  // sends to all valid tokens at Graph time.
+  const isValidEmailCell = (raw: string | null | undefined): boolean => {
+    if (!raw) return false;
+    const tokens = raw
+      .split(/[;,]+/)
+      .flatMap((t) => t.split(/\s+/))
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return tokens.some(validateEmail);
+  };
+
+  const validContactCount = campaign.contacts.filter((c) => isValidEmailCell(c.email)).length;
   const allContactsHaveTemplate =
     campaign.contacts.length > 0 && campaign.contacts.every((c) => c.templateId);
   const canRun = validContactCount > 0 && (campaign.templateId || allContactsHaveTemplate);
@@ -164,8 +221,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
       key: "emails",
       label: "Email Finder",
       icon: <Mail className="h-4 w-4" />,
-      count:
-        campaign.contacts.filter((c) => !c.email || !validateEmail(c.email)).length || undefined,
+      count: campaign.contacts.filter((c) => !isValidEmailCell(c.email)).length || undefined,
     },
     { key: "template", label: "Template", icon: <FileText className="h-4 w-4" /> },
     {
@@ -234,6 +290,57 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
                 </h2>
               )}
               {statusBadge()}
+              {(() => {
+                const currentKind = getCampaignKind(campaign);
+                const kindStyles: Record<CampaignKind, string> = {
+                  outreach: "bg-cyan-500/10 text-cyan-300 border-cyan-500/30",
+                  follow_up: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+                  announcement: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+                };
+                const kindLabels: Record<CampaignKind, string> = {
+                  outreach: "Outreach",
+                  follow_up: "Follow-up",
+                  announcement: "Announcement",
+                };
+                if (editingKind) {
+                  return (
+                    <div className="flex items-center gap-1">
+                      {(Object.keys(kindLabels) as CampaignKind[]).map((k) => (
+                        <button
+                          key={k}
+                          onClick={() => {
+                            campaignStore.updateCampaign(campaignId, { kind: k });
+                            setEditingKind(false);
+                            reload();
+                          }}
+                          className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
+                            k === currentKind
+                              ? kindStyles[k]
+                              : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
+                          }`}
+                        >
+                          {kindLabels[k]}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setEditingKind(false)}
+                        className="text-slate-500 hover:text-slate-300 ml-1"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    onClick={() => setEditingKind(true)}
+                    title="Click to change campaign type — affects validation and send defaults"
+                    className={`px-2 py-0.5 rounded text-xs font-medium border hover:opacity-80 transition-opacity ${kindStyles[currentKind]}`}
+                  >
+                    {kindLabels[currentKind]}
+                  </button>
+                );
+              })()}
             </div>
 
             {editingDesc ? (
@@ -512,7 +619,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
                             {(contact as any).company || (contact as any).Company || "—"}
                           </td>
                           <td className="px-4 py-3">
-                            {validateEmail(contact.email) ? (
+                            {isValidEmailCell(contact.email) ? (
                               <span className="text-xs text-emerald-400">Valid</span>
                             ) : (
                               <span className="text-xs text-rose-400">Invalid</span>
@@ -637,13 +744,24 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({
           {campaign.companies.length} companies · {validContactCount} valid contacts ·{" "}
           {campaign.templateId ? "Template set" : "No template"}
         </div>
-        <button
-          onClick={onRunCampaign}
-          disabled={!canRun}
-          className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Play className="h-4 w-4" /> Run Campaign
-        </button>
+        <div className="flex items-center gap-3">
+          {failedContactIds.length > 0 && onRetryFailed && (
+            <button
+              onClick={() => onRetryFailed(failedContactIds)}
+              className="btn-secondary flex items-center gap-2 border-rose-500/40 text-rose-300 hover:border-rose-400"
+              title="Re-run only the recipients whose last send failed or bounced"
+            >
+              Retry failed ({failedContactIds.length})
+            </button>
+          )}
+          <button
+            onClick={onRunCampaign}
+            disabled={!canRun}
+            className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Play className="h-4 w-4" /> Run Campaign
+          </button>
+        </div>
       </div>
     </div>
   );
