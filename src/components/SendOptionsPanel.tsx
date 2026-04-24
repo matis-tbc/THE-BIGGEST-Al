@@ -7,6 +7,26 @@ export interface SendOptionsValue {
   mode: SendMode;
   staggerSeconds: number;
   scheduledForIso?: string;
+  /**
+   * CC addresses applied to every draft. Undefined = use the hard-coded
+   * default inside batchProcessor. Empty array = explicit no-CC. Non-empty
+   * array = user-provided list. The dispatch pipeline still auto-removes the
+   * active sender's address from this list to prevent self-CC.
+   */
+  ccEmails?: string[];
+}
+
+const DEFAULT_CC_EMAIL = "cuhyperloop@colorado.edu";
+
+function parseCcInput(raw: string): string[] {
+  return raw
+    .split(/[,;\s]+/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function formatCcList(list: string[] | undefined): string {
+  return (list ?? []).join(", ");
 }
 
 interface SendOptionsPanelProps {
@@ -14,6 +34,10 @@ interface SendOptionsPanelProps {
   value: SendOptionsValue | null;
   onChange: (value: SendOptionsValue) => void;
   disabled?: boolean;
+  /** Default mode when `value` is null (i.e. on first render). */
+  defaultMode?: SendMode;
+  /** Default scheduled time (local datetime-local string, e.g. "2026-04-24T08:00"). */
+  defaultScheduledLocal?: string;
 }
 
 const MODE_OPTIONS: Array<{ id: SendMode; label: string; description: string }> = [
@@ -39,7 +63,7 @@ function localToUtcIso(localValue: string): string {
   return date.toISOString();
 }
 
-function defaultScheduledLocal(): string {
+function nowPlus30Minutes(): string {
   const d = new Date(Date.now() + 30 * 60 * 1000);
   d.setSeconds(0, 0);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -51,12 +75,18 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
   value,
   onChange,
   disabled,
+  defaultMode,
+  defaultScheduledLocal: defaultScheduledProp,
 }) => {
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [accountName, setAccountName] = useState<string | null>(null);
   const [scopeWarning, setScopeWarning] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
-  const [scheduledLocal, setScheduledLocal] = useState<string>(defaultScheduledLocal());
+  const [scheduledLocal, setScheduledLocal] = useState<string>(
+    defaultScheduledProp ?? nowPlus30Minutes(),
+  );
+  const [ccInput, setCcInput] = useState<string>("");
+  const [ccInitialized, setCcInitialized] = useState(false);
 
   const loadAccount = async () => {
     if (!window.electronAPI) return;
@@ -78,9 +108,27 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
   useEffect(() => {
     loadAccount();
     if (!value) {
-      onChange({ mode: "draft", staggerSeconds: 0 });
+      const initialMode = defaultMode ?? "draft";
+      const initial: SendOptionsValue = { mode: initialMode, staggerSeconds: 0 };
+      if (initialMode === "schedule") {
+        initial.scheduledForIso = localToUtcIso(defaultScheduledProp ?? scheduledLocal);
+      }
+      onChange(initial);
     }
-  }, [loadAccount, value, onChange]);
+  }, [loadAccount, value, onChange, defaultMode, defaultScheduledProp, scheduledLocal]);
+
+  // Seed the CC input once we know who is signed in. Rule:
+  //   signed in as cuhyperloop@... -> empty (don't CC yourself)
+  //   anyone else                  -> default to the team inbox for visibility
+  // User can freely override the field after this initial seed.
+  useEffect(() => {
+    if (ccInitialized || !accountEmail) return;
+    const signedInAsTeam = accountEmail.toLowerCase().startsWith("cuhyperloop@");
+    const initial = signedInAsTeam ? [] : [DEFAULT_CC_EMAIL];
+    setCcInput(formatCcList(initial));
+    onChange({ ...(value ?? { mode: "draft", staggerSeconds: 0 }), ccEmails: initial });
+    setCcInitialized(true);
+  }, [accountEmail, ccInitialized, value, onChange]);
 
   const switchAccount = async () => {
     if (!window.electronAPI) return;
@@ -203,6 +251,27 @@ export const SendOptionsPanel: React.FC<SendOptionsPanelProps> = ({
           </div>
         </div>
       )}
+
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide">
+          CC (comma-separated, optional)
+        </label>
+        <input
+          type="text"
+          value={ccInput}
+          onChange={(e) => {
+            setCcInput(e.target.value);
+            update({ ccEmails: parseCcInput(e.target.value) });
+          }}
+          disabled={disabled}
+          placeholder={isHyperloop ? "No CC (sending from team inbox)" : "cuhyperloop@colorado.edu"}
+          className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-sky-400 focus:outline-none"
+        />
+        <div className="text-[11px] text-slate-500">
+          Applied to every draft. The active sender ({accountEmail || "…"}) is automatically
+          excluded, so you never CC yourself. Leave blank for no CC.
+        </div>
+      </div>
 
       {showStagger && (
         <div className="space-y-2">

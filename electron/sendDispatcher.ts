@@ -12,6 +12,7 @@ export interface RecipientPayload {
   ccEmails?: string[];
   subject: string;
   bodyHtml: string;
+  attachment?: SharedAttachment;
 }
 
 export interface SharedAttachment {
@@ -151,11 +152,12 @@ export async function dispatchRecipient(
     const conversationId: string | undefined = draft.conversationId;
     const internetMessageId: string | undefined = draft.internetMessageId;
 
-    if (options.attachment) {
-      if (options.attachment.buffer.length <= SMALL_ATTACHMENT_LIMIT) {
-        await attachInlineSmall(authService, messageId, options.attachment);
+    const effectiveAttachment = recipient.attachment ?? options.attachment;
+    if (effectiveAttachment) {
+      if (effectiveAttachment.buffer.length <= SMALL_ATTACHMENT_LIMIT) {
+        await attachInlineSmall(authService, messageId, effectiveAttachment);
       } else {
-        await attachLargeViaUploadSession(authService, messageId, options.attachment);
+        await attachLargeViaUploadSession(authService, messageId, effectiveAttachment);
       }
     }
 

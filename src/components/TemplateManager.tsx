@@ -1,5 +1,5 @@
 import type React from "react";
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   extractVariables,
   mergeTemplate,
@@ -72,10 +72,10 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({
     return Array.from(variables);
   }, [contacts]);
 
-  const refreshTemplates = async () => {
+  const refreshTemplates = useCallback(async () => {
     const stored = await projectStore.listTemplates();
     setTemplates(stored);
-  };
+  }, []);
 
   useEffect(() => {
     refreshTemplates().catch((err) => {

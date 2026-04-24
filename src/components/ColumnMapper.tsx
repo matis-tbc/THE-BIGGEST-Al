@@ -8,6 +8,7 @@ const COLUMN_TYPE_OPTIONS = [
   { value: "company", label: "Company" },
   { value: "title", label: "Title / Role" },
   { value: "member", label: "Team Member" },
+  { value: "attachmentPath", label: "Attachment Path (per-row PDF)" },
   { value: "templateSymbol", label: "Template Code" },
   { value: "campaign", label: "Campaign Tag" },
   { value: "template", label: "Template (full name)" },
@@ -82,6 +83,7 @@ export const ColumnMapper: React.FC<ColumnMapperProps> = ({
       if (m.inferredType === "notes") return "Notes";
       if (m.inferredType === "date") return "Date";
       if (m.inferredType === "companyInfo") return "Company Info";
+      if (m.inferredType === "attachmentPath") return "attachment_path";
       return m.suggestedHeader || `Column ${m.index + 1}`;
     });
     onConfirm(headers);

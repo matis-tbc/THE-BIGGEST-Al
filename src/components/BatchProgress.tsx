@@ -16,6 +16,8 @@ interface BatchProgressProps {
   templates: Template[];
   defaultTemplateId: string | null;
   attachment: File | null;
+  attachmentColumnName?: string | null;
+  campaignKind?: "outreach" | "follow_up" | "announcement";
   onComplete: (operationId: string, results: ProcessingStatus[]) => void;
   onBack: () => void;
 }
@@ -27,14 +29,25 @@ interface ProcessingStatus {
   error?: string;
 }
 
+function tomorrow8amLocal(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(8, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export const BatchProgress: React.FC<BatchProgressProps> = ({
   contacts,
   templates,
   defaultTemplateId,
   attachment,
+  attachmentColumnName = null,
+  campaignKind = "outreach",
   onComplete,
   onBack,
 }) => {
+  const isNonOutreach = campaignKind !== "outreach";
   const processorRef = useRef<BatchProcessor | null>(null);
   const [statuses, setStatuses] = useState<ProcessingStatus[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -120,6 +133,7 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
           const batch = Math.min(totalBatches || 1, Math.max(1, Math.ceil(processed / 4)));
           setCurrentBatch(batch);
         },
+        attachmentColumnName,
       );
 
       setOperationId(opId);
@@ -373,6 +387,8 @@ export const BatchProgress: React.FC<BatchProgressProps> = ({
           value={sendOptions}
           onChange={setSendOptions}
           disabled={isProcessing}
+          defaultMode={isNonOutreach ? "schedule" : undefined}
+          defaultScheduledLocal={isNonOutreach ? tomorrow8amLocal() : undefined}
         />
       )}
 

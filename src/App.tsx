@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { AuthScreen } from "./components/AuthScreen";
 import { replyPoller } from "./services/replyPoller";
 import { RepliesPanel } from "./components/RepliesPanel";
@@ -19,7 +19,7 @@ import { seedTemplates } from "./utils/seedTemplates";
 import { CampaignHome } from "./components/CampaignHome";
 import { MemberManager } from "./components/MemberManager";
 import { projectStore } from "./services/projectStore";
-import { campaignStore } from "./services/campaignStore";
+import { campaignStore, getCampaignKind } from "./services/campaignStore";
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 
@@ -60,6 +60,12 @@ interface AppState {
   contacts: Contact[];
   template: Template | null;
   attachment: File | null;
+  /**
+   * When set, per-row attachments are active. Points at a CSV column whose
+   * values are file paths (one PDF per recipient). The single-file `attachment`
+   * field above becomes an optional campaign-level fallback.
+   */
+  attachmentColumnName: string | null;
   operationId: string | null;
   results: ProcessingResult[];
   templates: Template[];
@@ -87,6 +93,7 @@ function App() {
     contacts: [],
     template: null,
     attachment: null,
+    attachmentColumnName: null,
     operationId: null,
     results: [],
     templates: [],
@@ -100,6 +107,16 @@ function App() {
   const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(null);
   const [tokenExpiry, setTokenExpiry] = useState<number | null>(null);
   const [restoredProjectNotice, setRestoredProjectNotice] = useState<string | null>(null);
+
+  // Memoized active campaign kind so we don't re-read localStorage on every
+  // render and thrash child component memos.
+  const activeCampaignKind = useMemo(
+    () =>
+      getCampaignKind(
+        appState.activeCampaignId ? campaignStore.getCampaign(appState.activeCampaignId) : null,
+      ),
+    [appState.activeCampaignId],
+  );
 
   useEffect(() => {
     console.info("[App] Renderer booted. electronAPI available:", Boolean(window.electronAPI));
@@ -132,16 +149,27 @@ function App() {
     const allHaveTemplates =
       appState.contacts.length > 0 && appState.contacts.every((c) => !!c.templateId);
 
+    // In per-row attachment mode, the single-file `attachment` is intentionally
+    // null — each recipient's file is resolved from the CSV column at dispatch.
+    // Treat that as valid for this guard.
+    const hasAttachmentOrPerRow = !!appState.attachment || !!appState.attachmentColumnName;
+
     if (
       appState.currentStep === "processing" &&
-      (!appState.attachment || (!appState.template && !allHaveTemplates))
+      (!hasAttachmentOrPerRow || (!appState.template && !allHaveTemplates))
     ) {
       console.warn(
         "[App] Processing step reached without required template/attachment; redirecting back.",
       );
       setAppState((prev) => ({ ...prev, currentStep: "attachment" }));
     }
-  }, [appState.currentStep, appState.template, appState.attachment, appState.contacts]);
+  }, [
+    appState.currentStep,
+    appState.template,
+    appState.attachment,
+    appState.attachmentColumnName,
+    appState.contacts,
+  ]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
@@ -223,6 +251,17 @@ function App() {
       return;
     }
 
+    // Per-row attachments: if any row carries a non-empty `attachment_path`
+    // column value, activate per-row mode. Skips the single-file picker.
+    const attachmentColumnName = contacts.some(
+      (c) => typeof c.attachment_path === "string" && c.attachment_path.trim().length > 0,
+    )
+      ? "attachment_path"
+      : null;
+    if (attachmentColumnName) {
+      console.info("[App] Per-row attachments detected on column:", attachmentColumnName);
+    }
+
     const allHaveTemplates = contacts.length > 0 && contacts.every((c) => !!c.templateId);
 
     if (allHaveTemplates) {
@@ -231,11 +270,17 @@ function App() {
       setAppState((prev) => ({
         ...prev,
         contacts,
+        attachmentColumnName,
         templates: savedTemplates as unknown as Template[],
         currentStep: "attachment",
       }));
     } else {
-      setAppState((prev) => ({ ...prev, contacts, currentStep: "template" }));
+      setAppState((prev) => ({
+        ...prev,
+        contacts,
+        attachmentColumnName,
+        currentStep: "template",
+      }));
     }
   };
 
@@ -278,14 +323,22 @@ function App() {
   ) => {
     console.info("[App] Processing completed. Operation ID:", operationId);
     const contactMap = new Map(appState.contacts.map((contact) => [contact.id, contact]));
-    const hadAttachment = appState.attachment !== null;
+    const hadCampaignAttachment = appState.attachment !== null;
+    const perRowColumn = appState.attachmentColumnName;
     const enrichedResults: ProcessingResult[] = results.map((result) => {
       const contact = contactMap.get(result.contactId);
-      // If attachment was expected but contact is still "drafted" or "attaching",
-      // mark as failed - the attachment never completed
+      // If an attachment was expected for this recipient but they're still
+      // "drafted" or "attaching", the upload never completed.
+      const rowHasPerRowPath = !!(
+        perRowColumn &&
+        contact &&
+        typeof contact[perRowColumn] === "string" &&
+        (contact[perRowColumn] as string).trim().length > 0
+      );
+      const expectedAttachment = hadCampaignAttachment || rowHasPerRowPath;
       let finalStatus = result.status;
       let finalError = result.error;
-      if (hadAttachment && (result.status === "drafted" || result.status === "attaching")) {
+      if (expectedAttachment && (result.status === "drafted" || result.status === "attaching")) {
         finalStatus = "failed";
         finalError = "Attachment upload did not complete";
       }
@@ -330,6 +383,7 @@ function App() {
       contacts: [],
       template: null,
       attachment: null,
+      attachmentColumnName: null,
       operationId: null,
       results: [],
       templates: [],
@@ -346,6 +400,7 @@ function App() {
       contacts: [],
       template: null,
       attachment: null,
+      attachmentColumnName: null,
       operationId: null,
       results: [],
       activeCampaignId: null,
@@ -359,6 +414,7 @@ function App() {
       contacts: [],
       template: null,
       attachment: null,
+      attachmentColumnName: null,
       operationId: null,
       results: [],
     }));
@@ -380,9 +436,17 @@ function App() {
     const savedTemplates = await projectStore.listTemplates();
     const template = savedTemplates.find((t) => t.id === campaign.templateId);
 
+    // Re-detect per-row attachments from the campaign's saved contacts.
+    const attachmentColumnName = campaign.contacts.some(
+      (c) => typeof c.attachment_path === "string" && c.attachment_path.trim().length > 0,
+    )
+      ? "attachment_path"
+      : null;
+
     setAppState((prev) => ({
       ...prev,
       contacts: campaign.contacts,
+      attachmentColumnName,
       template: template
         ? {
             id: template.id,
@@ -745,6 +809,18 @@ function App() {
             <AttachmentPicker
               onAttachmentSelected={handleAttachmentSelected}
               onBack={() => setAppState((prev) => ({ ...prev, currentStep: "template" }))}
+              perRowColumnName={appState.attachmentColumnName}
+              perRowRecipientCount={appState.contacts.length}
+              onContinueWithoutFile={() =>
+                setAppState((prev) => ({
+                  ...prev,
+                  attachment: null,
+                  currentStep: "preflight",
+                }))
+              }
+              onOverrideToSingleFile={() =>
+                setAppState((prev) => ({ ...prev, attachmentColumnName: null }))
+              }
             />
           )}
 
@@ -754,6 +830,8 @@ function App() {
               templates={appState.templates}
               defaultTemplateId={appState.template?.id || null}
               attachment={appState.attachment}
+              attachmentColumnName={appState.attachmentColumnName}
+              campaignKind={activeCampaignKind}
               onBack={() => setAppState((prev) => ({ ...prev, currentStep: "attachment" }))}
               onContinue={() => setAppState((prev) => ({ ...prev, currentStep: "processing" }))}
             />
@@ -764,7 +842,9 @@ function App() {
               contacts={appState.contacts}
               templates={appState.templates}
               defaultTemplateId={appState.template?.id || null}
-              attachment={appState.attachment!}
+              attachment={appState.attachment}
+              attachmentColumnName={appState.attachmentColumnName}
+              campaignKind={activeCampaignKind}
               onComplete={handleProcessingComplete}
               onBack={() => setAppState((prev) => ({ ...prev, currentStep: "attachment" }))}
             />

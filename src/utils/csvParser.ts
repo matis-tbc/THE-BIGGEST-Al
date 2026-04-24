@@ -65,6 +65,16 @@ export function inferColumnTypes(rows: string[][]): ColumnInference[] {
       confidence = 0.95;
       suggestedHeader = "email";
     }
+    // 2b. attachment_path: values look like file paths or end in common file extensions
+    else if (
+      !usedTypes.has("attachmentPath") &&
+      nonEmpty.filter((v) => /[/\\].+\.[A-Za-z0-9]{2,5}$|^~[/\\]|^[A-Za-z]:[/\\]/.test(v)).length >
+        nonEmpty.length * 0.6
+    ) {
+      inferredType = "attachmentPath";
+      confidence = 0.8;
+      suggestedHeader = "attachment_path";
+    }
     // 3. date: patterns like "8-Dec", "2/3/2026"
     else if (
       nonEmpty.filter((v) =>

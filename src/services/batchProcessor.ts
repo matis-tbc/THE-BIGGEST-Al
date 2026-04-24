@@ -84,6 +84,7 @@ export class BatchProcessor {
     attachment: File | null,
     sendOptions: SendOptions,
     onProgress: (results: ProcessingResult[]) => void,
+    attachmentColumnName: string | null = null,
   ): Promise<string> {
     if (!window.electronAPI) {
       throw new Error("Electron bridge unavailable");
@@ -121,6 +122,10 @@ export class BatchProcessor {
       const mergedRecipients = mergeTemplate(toTemplate, contact).trim();
       const toEmails = parseRecipients(mergedRecipients);
       const toEmail = toEmails[0] || contact.email;
+      const perRowAttachmentPath =
+        attachmentColumnName && typeof contact[attachmentColumnName] === "string"
+          ? (contact[attachmentColumnName] as string).trim()
+          : "";
       return {
         recipientId: recipientIds[index],
         toEmail,
@@ -128,6 +133,7 @@ export class BatchProcessor {
         ccEmails: effectiveCc,
         subject,
         bodyHtml,
+        ...(perRowAttachmentPath ? { attachmentPath: perRowAttachmentPath } : {}),
       };
     });
 

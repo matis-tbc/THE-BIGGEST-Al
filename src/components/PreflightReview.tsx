@@ -1,5 +1,5 @@
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   mergeTemplate,
   parseTemplateSections,
@@ -9,6 +9,18 @@ import {
   getSubjectForContactIndex,
 } from "../utils/templateMerge";
 import { sanitizeEmailHtml } from "../utils/sanitize";
+
+const MAX_ATTACHMENT_BYTES = 150 * 1024 * 1024;
+
+interface AttachmentCheckResult {
+  path: string;
+  exists: boolean;
+  sizeBytes?: number;
+  fileName?: string;
+  error?: string;
+  /** True when the file exists but exceeds the 150 MB Graph per-message cap. */
+  oversize?: boolean;
+}
 
 interface Contact {
   id: string;
@@ -31,6 +43,8 @@ interface PreflightReviewProps {
   templates: Template[];
   defaultTemplateId: string | null;
   attachment: File | null;
+  attachmentColumnName?: string | null;
+  campaignKind?: "outreach" | "follow_up" | "announcement";
   onBack: () => void;
   onContinue: () => void;
 }
@@ -40,11 +54,73 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
   templates,
   defaultTemplateId,
   attachment,
+  attachmentColumnName = null,
+  campaignKind = "outreach",
   onBack,
   onContinue,
 }) => {
+  const isOutreach = campaignKind === "outreach";
   const [previewIndex, setPreviewIndex] = useState(0);
   const selectedContact = contacts[previewIndex] || contacts[0];
+
+  // Map contact.id → attachment check result. Populated async via the
+  // attachment:check-path IPC after mount.
+  const [attachmentChecks, setAttachmentChecks] = useState<Map<string, AttachmentCheckResult>>(
+    new Map(),
+  );
+  const [attachmentChecksLoading, setAttachmentChecksLoading] = useState(false);
+
+  useEffect(() => {
+    if (!attachmentColumnName) {
+      setAttachmentChecks(new Map());
+      return;
+    }
+    const api: any = (window as any).electronAPI;
+    if (!api || typeof api.checkAttachmentPath !== "function") {
+      // Non-Electron renderer. Skip validation; dispatcher will surface
+      // failures at send time.
+      return;
+    }
+    let cancelled = false;
+    setAttachmentChecksLoading(true);
+    (async () => {
+      const next = new Map<string, AttachmentCheckResult>();
+      for (const contact of contacts) {
+        const raw = contact[attachmentColumnName];
+        if (typeof raw !== "string" || raw.trim().length === 0) continue;
+        const pathValue = raw.trim();
+        try {
+          const res = await api.checkAttachmentPath(pathValue);
+          const oversize =
+            res?.exists &&
+            typeof res.sizeBytes === "number" &&
+            res.sizeBytes > MAX_ATTACHMENT_BYTES;
+          next.set(contact.id, {
+            path: pathValue,
+            exists: !!res?.exists,
+            sizeBytes: res?.sizeBytes,
+            fileName: res?.fileName,
+            error: res?.error,
+            oversize: !!oversize,
+          });
+        } catch (err: any) {
+          next.set(contact.id, {
+            path: pathValue,
+            exists: false,
+            error: err?.message || String(err),
+          });
+        }
+        if (cancelled) return;
+      }
+      if (!cancelled) {
+        setAttachmentChecks(next);
+        setAttachmentChecksLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [contacts, attachmentColumnName]);
 
   const getTemplateForContact = (contact: Contact) => {
     const activeId = contact.templateId || defaultTemplateId;
@@ -159,6 +235,18 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       }
     });
 
+    // Per-row attachment aggregates
+    const rowsWithPaths = attachmentColumnName
+      ? contacts.filter((c) => {
+          const v = c[attachmentColumnName];
+          return typeof v === "string" && v.trim().length > 0;
+        })
+      : [];
+    const attachmentResults = Array.from(attachmentChecks.values());
+    const missingAttachments = attachmentResults.filter((r) => !r.exists);
+    const oversizeAttachments = attachmentResults.filter((r) => r.oversize);
+    const totalAttachmentBytes = attachmentResults.reduce((sum, r) => sum + (r.sizeBytes || 0), 0);
+
     return {
       invalidEmails,
       duplicateEmailCount,
@@ -168,8 +256,25 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
       emptyRecipientCount,
       missingCUHyperloop,
       subjectGroups,
+      perRow: {
+        active: !!attachmentColumnName,
+        columnName: attachmentColumnName,
+        rowsWithPaths: rowsWithPaths.length,
+        rowsWithoutPaths: contacts.length - rowsWithPaths.length,
+        missingCount: missingAttachments.length,
+        oversizeCount: oversizeAttachments.length,
+        totalBytes: totalAttachmentBytes,
+        loading: attachmentChecksLoading,
+      },
     };
-  }, [contacts, attachment, getTemplateForContact]);
+  }, [
+    contacts,
+    attachment,
+    attachmentChecks,
+    attachmentChecksLoading,
+    attachmentColumnName,
+    getTemplateForContact,
+  ]);
 
   const preview = useMemo(() => {
     if (!selectedContact) return null;
@@ -191,7 +296,9 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
   const hasBlockingIssues =
     checks.invalidEmails.length > 0 ||
     checks.templateValidation.errors.length > 0 ||
-    checks.emptyRecipientCount > 0;
+    checks.emptyRecipientCount > 0 ||
+    checks.perRow.missingCount > 0 ||
+    checks.perRow.oversizeCount > 0;
 
   return (
     <div className="space-y-6">
@@ -232,18 +339,55 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
             </li>
             <li
               className={
-                checks.missingCUHyperloop.length > 0 ? "text-yellow-500" : "text-emerald-400"
+                checks.missingCUHyperloop.length > 0
+                  ? isOutreach
+                    ? "text-yellow-500"
+                    : "text-slate-400"
+                  : "text-emerald-400"
               }
             >
               Missing "CU Hyperloop" in subject: {checks.missingCUHyperloop.length}
-              {checks.missingCUHyperloop.length > 0 && (
+              {checks.missingCUHyperloop.length > 0 && isOutreach && (
                 <span className="block text-xs mt-1">
                   Power Automate won't send drafts without "CU Hyperloop" in the subject line.
+                </span>
+              )}
+              {checks.missingCUHyperloop.length > 0 && !isOutreach && (
+                <span className="block text-[11px] mt-1 text-slate-500">
+                  Informational for {campaignKind} campaigns — not enforced.
                 </span>
               )}
             </li>
             {checks.attachmentWarning && (
               <li className="text-yellow-500">{checks.attachmentWarning}</li>
+            )}
+            {checks.perRow.active && (
+              <>
+                <li className="text-slate-300 pt-2 border-t border-slate-800 mt-2">
+                  Per-row attachments (column:{" "}
+                  <code className="text-slate-100">{checks.perRow.columnName}</code>):{" "}
+                  {checks.perRow.rowsWithPaths} of {contacts.length}
+                </li>
+                {checks.perRow.loading && (
+                  <li className="text-slate-400 text-xs">Checking attachment paths…</li>
+                )}
+                <li
+                  className={checks.perRow.missingCount > 0 ? "text-rose-400" : "text-emerald-400"}
+                >
+                  Missing files: {checks.perRow.missingCount}
+                </li>
+                <li
+                  className={checks.perRow.oversizeCount > 0 ? "text-rose-400" : "text-emerald-400"}
+                >
+                  Oversize (&gt;150&nbsp;MB): {checks.perRow.oversizeCount}
+                </li>
+                {checks.perRow.totalBytes > 0 && (
+                  <li className="text-slate-400 text-xs">
+                    Total upload: {Math.round(checks.perRow.totalBytes / (1024 * 1024))} MB across{" "}
+                    {checks.perRow.rowsWithPaths} files
+                  </li>
+                )}
+              </>
             )}
           </ul>
           {/* Per-contact issue details */}
@@ -390,6 +534,56 @@ export const PreflightReview: React.FC<PreflightReviewProps> = ({
           )}
         </div>
       </div>
+
+      {checks.perRow.active && attachmentChecks.size > 0 && (
+        <details className="card">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+            Per-row attachments ({attachmentChecks.size})
+          </summary>
+          <div className="mt-3 space-y-1.5 max-h-64 overflow-y-auto">
+            {contacts.map((contact, idx) => {
+              const check = attachmentChecks.get(contact.id);
+              if (!check) return null;
+              const sizeKb =
+                typeof check.sizeBytes === "number"
+                  ? Math.max(1, Math.round(check.sizeBytes / 1024))
+                  : null;
+              const statusClass = check.exists
+                ? check.oversize
+                  ? "text-rose-400"
+                  : "text-emerald-400"
+                : "text-rose-400";
+              const statusLabel = check.exists ? (check.oversize ? "Oversize" : "OK") : "Missing";
+              return (
+                <button
+                  key={contact.id}
+                  type="button"
+                  onClick={() => setPreviewIndex(idx)}
+                  className="w-full flex items-center gap-2 text-xs bg-slate-900/40 hover:bg-slate-900/70 rounded-lg px-3 py-2 text-left"
+                >
+                  <span className={`flex-shrink-0 font-mono ${statusClass}`}>[{statusLabel}]</span>
+                  <span className="text-slate-200 font-medium truncate flex-shrink-0 max-w-[180px]">
+                    {contact.name}
+                  </span>
+                  <span className="text-slate-500 truncate flex-1" title={check.path}>
+                    {check.fileName || check.path}
+                  </span>
+                  {sizeKb !== null && (
+                    <span className="text-slate-500 flex-shrink-0">
+                      {sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`}
+                    </span>
+                  )}
+                  {check.error && (
+                    <span className="text-rose-400/80 truncate flex-shrink-0 max-w-[200px]">
+                      {check.error}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </details>
+      )}
 
       <div className="flex justify-between">
         <button onClick={onBack} className="btn-secondary">

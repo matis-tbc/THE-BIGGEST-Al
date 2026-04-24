@@ -1,8 +1,9 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Users, Building2, Archive, Clock } from "lucide-react";
-import { campaignStore, type Campaign } from "../services/campaignStore";
+import { Plus, Users, Building2, Archive, Clock, FileText } from "lucide-react";
+import { campaignStore, type Campaign, type CampaignKind } from "../services/campaignStore";
+import { PacketSplitter } from "./PacketSplitter";
 
 interface CampaignHomeProps {
   onOpenCampaign: (id: string) => void;
@@ -14,6 +15,8 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [newKind, setNewKind] = useState<CampaignKind>("outreach");
+  const [splitterOpen, setSplitterOpen] = useState(false);
 
   useEffect(() => {
     setCampaigns(campaignStore.listCampaigns());
@@ -34,15 +37,38 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
       companies: [],
       contacts: [],
       templateId: null,
+      kind: newKind,
       runs: [],
     };
 
     campaignStore.saveCampaign(campaign);
     setNewName("");
     setNewDescription("");
+    setNewKind("outreach");
     setShowCreateForm(false);
     onOpenCampaign(campaign.id);
   };
+
+  const kindOptions: Array<{ id: CampaignKind; label: string; description: string }> = [
+    {
+      id: "outreach",
+      label: "Outreach",
+      description:
+        "Cold email to new prospects. Uses AI company discovery and the CU Hyperloop subject-line guard.",
+    },
+    {
+      id: "follow_up",
+      label: "Follow-up",
+      description:
+        "Warm messages to people you've already contacted. Skips lead discovery, softer validation.",
+    },
+    {
+      id: "announcement",
+      label: "Announcement / thank-you",
+      description:
+        "One-off blast to a known list (sponsor thank-yous, updates). Defaults to scheduled send.",
+    },
+  ];
 
   const statusBadge = (status: Campaign["status"]) => {
     const styles = {
@@ -73,6 +99,13 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
           </p>
         </div>
         <div className="flex gap-3">
+          <button
+            onClick={() => setSplitterOpen(true)}
+            className="btn-secondary flex items-center gap-2"
+            title="Split a multi-page sponsor packet PDF into one file per sponsor"
+          >
+            <FileText className="h-4 w-4" /> Split Packet PDF
+          </button>
           <button onClick={onManageMembers} className="btn-secondary flex items-center gap-2">
             <Users className="h-4 w-4" /> Sender Profiles
           </button>
@@ -116,6 +149,31 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Campaign type</label>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              {kindOptions.map((opt) => {
+                const isActive = newKind === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setNewKind(opt.id)}
+                    className={`rounded-lg border px-3 py-2 text-left transition ${
+                      isActive
+                        ? "border-yellow-400 bg-yellow-500/10"
+                        : "border-slate-700 bg-slate-900/40 hover:border-slate-600"
+                    }`}
+                  >
+                    <div className="text-sm font-medium text-slate-100">{opt.label}</div>
+                    <div className="mt-1 text-[11px] text-slate-400 leading-snug">
+                      {opt.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className="flex gap-3 justify-end">
             <button
@@ -198,6 +256,8 @@ export const CampaignHome: React.FC<CampaignHomeProps> = ({ onOpenCampaign, onMa
           for quick actions — navigate, create campaigns, and more
         </p>
       </div>
+
+      <PacketSplitter open={splitterOpen} onClose={() => setSplitterOpen(false)} />
     </div>
   );
 };

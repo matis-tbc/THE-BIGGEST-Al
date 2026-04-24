@@ -4,6 +4,8 @@ const { app, BrowserWindow, ipcMain, shell } = electron;
 const path = require("node:path");
 const http = require("node:http");
 const fs = require("node:fs");
+const fsp = require("node:fs/promises");
+const os = require("node:os");
 const { AuthService, parseScopesFromAccessToken, REQUIRED_SCOPES } = require("./auth");
 const { graphFetch, graphJson } = require("./graphHelper");
 const { dispatchRecipient, appendRunLog } = require("./sendDispatcher");
@@ -58,6 +60,137 @@ let pendingAuth: PendingAuth | null = null;
 function getPendingAuthStorePath(): string {
   return path.join(app.getPath("userData"), "pending-auth.json");
 }
+const MAX_ATTACHMENT_BYTES = 150 * 1024 * 1024; // Graph per-message cap
+
+const MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".zip": "application/zip",
+};
+
+function resolveAttachmentPath(raw: string): string {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith("~")) {
+    return path.join(os.homedir(), trimmed.slice(1));
+  }
+  return trimmed;
+}
+
+function mimeFromPath(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  return MIME_BY_EXT[ext] || "application/octet-stream";
+}
+
+async function loadAttachmentFromPath(
+  raw: string,
+): Promise<{ name: string; mime: string; buffer: Buffer }> {
+  const resolved = resolveAttachmentPath(raw);
+  const stat = await fsp.stat(resolved);
+  if (!stat.isFile()) {
+    throw new Error(`Not a file: ${resolved}`);
+  }
+  if (stat.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`Attachment exceeds 150 MB Graph limit (${stat.size} bytes): ${resolved}`);
+  }
+  const buffer = await fsp.readFile(resolved);
+  return {
+    name: path.basename(resolved),
+    mime: mimeFromPath(resolved),
+    buffer,
+  };
+}
+
+ipcMain.handle("tools:split-packet", async (event: any, rawInput: string, rawOutput: string) => {
+  const { spawn } = require("node:child_process");
+  const inputPath = resolveAttachmentPath(rawInput);
+  const outputPath = resolveAttachmentPath(rawOutput);
+  const scriptDir = path.join(os.homedir(), "Desktop", "hyperloop_packet_scripts");
+  const pythonBin = path.join(scriptDir, ".venv", "bin", "python");
+  const scriptPath = path.join(scriptDir, "split_packet_pdf.py");
+  if (!fs.existsSync(pythonBin)) {
+    return { ok: false, error: `python venv not found at ${pythonBin}` };
+  }
+  if (!fs.existsSync(scriptPath)) {
+    return { ok: false, error: `split script not found at ${scriptPath}` };
+  }
+  if (!fs.existsSync(inputPath)) {
+    return { ok: false, error: `input PDF not found at ${inputPath}` };
+  }
+  await fsp.mkdir(outputPath, { recursive: true });
+  return await new Promise((resolve) => {
+    const child = spawn(pythonBin, [scriptPath, "--input", inputPath, "--output", outputPath], {
+      cwd: scriptDir,
+    });
+    const emit = (line: string) => {
+      try {
+        event.sender.send("tools:split-packet:log", line);
+      } catch {}
+    };
+    child.stdout.on("data", (data: Buffer) => {
+      data
+        .toString()
+        .split(/\r?\n/)
+        .filter((l: string) => l.length > 0)
+        .forEach(emit);
+    });
+    child.stderr.on("data", (data: Buffer) => {
+      data
+        .toString()
+        .split(/\r?\n/)
+        .filter((l: string) => l.length > 0)
+        .forEach((l: string) => emit(`[stderr] ${l}`));
+    });
+    child.on("close", async (code: number) => {
+      if (code !== 0) {
+        resolve({ ok: false, error: `python exited with code ${code}` });
+        return;
+      }
+      try {
+        const files = await fsp.readdir(outputPath);
+        const pdfs = files.filter((f: string) => f.toLowerCase().endsWith(".pdf"));
+        resolve({ ok: true, filesWritten: pdfs.length });
+      } catch (err: any) {
+        resolve({ ok: true, filesWritten: undefined, error: err?.message });
+      }
+    });
+    child.on("error", (err: Error) => {
+      resolve({ ok: false, error: err.message });
+    });
+  });
+});
+
+ipcMain.handle("attachment:check-path", async (_: any, rawPath: string) => {
+  try {
+    const resolved = resolveAttachmentPath(rawPath || "");
+    if (!resolved) {
+      return { exists: false, error: "empty path" };
+    }
+    const stat = await fsp.stat(resolved);
+    if (!stat.isFile()) {
+      return { exists: false, error: "not a file" };
+    }
+    return {
+      exists: true,
+      sizeBytes: stat.size,
+      fileName: path.basename(resolved),
+    };
+  } catch (err: any) {
+    return { exists: false, error: err?.message || String(err) };
+  }
+});
+
 async function _graphRequest(
   accessToken: string,
   endpoint: string,
@@ -323,6 +456,16 @@ ipcMain.handle(
     for (let i = 0; i < payload.recipients.length; i++) {
       const recipient = payload.recipients[i];
 
+      let perRowAttachment: { name: string; mime: string; buffer: Buffer } | undefined;
+      let perRowAttachmentError: string | undefined;
+      if (recipient.attachmentPath) {
+        try {
+          perRowAttachment = await loadAttachmentFromPath(recipient.attachmentPath);
+        } catch (err: any) {
+          perRowAttachmentError = err?.message || String(err);
+        }
+      }
+
       let dispatchOptions: any;
       if (useDeferred) {
         const deferredMs = baseTimeMs + i * payload.staggerSeconds * 1000;
@@ -338,7 +481,22 @@ ipcMain.handle(
         };
       }
 
-      const result = await dispatchRecipient(authService, recipient, dispatchOptions);
+      // If the per-row path exists but failed to load, fail the row before it
+      // ever hits Graph — consistent with the "rest of the batch keeps running"
+      // contract for missing attachments.
+      let result: any;
+      if (perRowAttachmentError) {
+        result = {
+          recipientId: recipient.recipientId,
+          ok: false,
+          error: `Attachment path not readable: ${perRowAttachmentError}`,
+        };
+      } else {
+        const recipientWithAttachment = perRowAttachment
+          ? { ...recipient, attachment: perRowAttachment }
+          : recipient;
+        result = await dispatchRecipient(authService, recipientWithAttachment, dispatchOptions);
+      }
       if (result.ok) submitted++;
       else failed++;
 

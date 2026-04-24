@@ -23,6 +23,8 @@ export interface CampaignRun {
   failCount: number;
 }
 
+export type CampaignKind = "outreach" | "follow_up" | "announcement";
+
 export interface Campaign {
   id: string;
   name: string;
@@ -33,7 +35,26 @@ export interface Campaign {
   companies: GeneratedCompany[];
   contacts: Contact[];
   templateId: string | null;
+  attachmentColumnName?: string | null;
+  /**
+   * Campaign kind controls which flow gates apply:
+   * - outreach (default): cold-email flow with AI discovery + subject-line guards
+   * - follow_up: known contacts, no AI discovery, softer validation, schedule-first
+   * - announcement: one-off to a known list (thank-yous, updates); same gates as follow_up
+   * Missing or undefined is treated as "outreach" by `getCampaignKind()`.
+   */
+  kind?: CampaignKind;
   runs: CampaignRun[];
+}
+
+/**
+ * Normalize a Campaign's kind. Treats missing/unknown values as "outreach" so
+ * pre-kind campaigns keep behaving the same way.
+ */
+export function getCampaignKind(c: Pick<Campaign, "kind"> | null | undefined): CampaignKind {
+  const k = c?.kind;
+  if (k === "follow_up" || k === "announcement") return k;
+  return "outreach";
 }
 
 const CAMPAIGN_KEY = "email-drafter.campaigns.v1";

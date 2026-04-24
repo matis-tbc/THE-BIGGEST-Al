@@ -44,6 +44,21 @@ declare global {
         missing: string[];
         error?: string;
       }>;
+      checkAttachmentPath: (pathValue: string) => Promise<{
+        exists: boolean;
+        sizeBytes?: number;
+        fileName?: string;
+        error?: string;
+      }>;
+      splitPacket: (
+        input: string,
+        output: string,
+      ) => Promise<{
+        ok: boolean;
+        filesWritten?: number;
+        error?: string;
+      }>;
+      onSplitPacketLog: (callback: (line: string) => void) => () => void;
       dispatchRun: (payload: {
         runId: string;
         recipients: Array<{
@@ -52,6 +67,7 @@ declare global {
           ccEmails?: string[];
           subject: string;
           bodyHtml: string;
+          attachmentPath?: string;
         }>;
         attachment?: { name: string; mime: string; base64: string };
         mode: "draft" | "send-now" | "schedule";
@@ -206,6 +222,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   emailResolveDomain: (companyName: string) =>
     ipcRenderer.invoke("email:resolve-domain", companyName),
   checkScopes: () => ipcRenderer.invoke("auth:check-scopes"),
+  checkAttachmentPath: (pathValue: string) =>
+    ipcRenderer.invoke("attachment:check-path", pathValue),
+  splitPacket: (input: string, output: string) =>
+    ipcRenderer.invoke("tools:split-packet", input, output),
+  onSplitPacketLog: (callback: (line: string) => void) => {
+    const channel = "tools:split-packet:log";
+    const handler = (_: any, line: string) => callback(line);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
   dispatchRun: (payload: any) => ipcRenderer.invoke("mail:dispatch-run", payload),
   onDispatchProgress: (runId: string, callback: (event: any) => void) => {
     const channel = `mail:dispatch-progress:${runId}`;
